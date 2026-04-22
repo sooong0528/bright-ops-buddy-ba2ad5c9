@@ -61,23 +61,26 @@ export default function Dashboard() {
     <div className="space-y-6">
       {/* Hero 概览条 */}
       <div className="rounded-2xl bg-gradient-hero p-6 md:p-8 text-primary-foreground shadow-elev-lg relative overflow-hidden">
-        <div className="absolute inset-0 data-grid opacity-10" />
+        <div className="absolute inset-0 mesh-bg opacity-60" />
+        <div className="absolute inset-0 data-grid opacity-[0.07]" />
+        <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary-glow/30 blur-3xl" />
+        <div className="absolute -left-10 -bottom-20 h-48 w-48 rounded-full bg-info/30 blur-3xl" />
         <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-xs font-medium opacity-90 mb-2">
-              <span className="h-2 w-2 rounded-full bg-success animate-pulse-soft" />
+            <div className="inline-flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full bg-white/15 backdrop-blur mb-3 border border-white/20">
+              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-soft" />
               平台运行正常 · Zabbix 7.0.21 已对接
             </div>
-            <h2 className="text-2xl md:text-3xl font-semibold">业务系统运维态势 · 2025-04-22</h2>
-            <p className="text-sm opacity-85 mt-1.5 max-w-2xl">
+            <h2 className="text-2xl md:text-3xl font-semibold tracking-tight">业务系统运维态势 · 2025-04-22</h2>
+            <p className="text-sm opacity-85 mt-2 max-w-2xl leading-relaxed">
               指挥调度 Agent 已完成今日 3 项巡检任务，识别 2 项异常与 2 项关注，建议优先处理 app-svc-01 与 mq-01。
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button asChild variant="secondary" className="bg-white/15 text-primary-foreground hover:bg-white/25 border-0 backdrop-blur">
+          <div className="flex gap-2 shrink-0">
+            <Button asChild variant="secondary" className="bg-white/15 text-primary-foreground hover:bg-white/25 border border-white/20 backdrop-blur">
               <Link to="/inspection">查看巡检</Link>
             </Button>
-            <Button asChild className="bg-white text-primary hover:bg-white/90">
+            <Button asChild className="bg-white text-primary hover:bg-white/95 shadow-lg">
               <Link to="/assistant">向助手提问 <ArrowUpRight className="ml-1 h-4 w-4" /></Link>
             </Button>
           </div>
