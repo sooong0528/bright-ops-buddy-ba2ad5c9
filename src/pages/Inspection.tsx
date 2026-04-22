@@ -112,7 +112,7 @@ export default function Inspection() {
                   <span className="text-sm font-medium truncate">{h.name}</span>
                   <StatusBadge tone={statusTone(h.status)} dot>{h.status}</StatusBadge>
                 </div>
-                <div className="flex items-center justify-between mt-1 text-[11px] text-muted-foreground">
+                <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
                   <span>{h.ip}</span>
                   <span>{h.group}</span>
                 </div>
@@ -158,7 +158,7 @@ export default function Inspection() {
                       {selected.ping > 100 ? "超时" : `${selected.ping} ms`}
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1">阈值：连续 3 次失败触发严重</p>
+                  <p className="text-xs text-muted-foreground mt-1">阈值：连续 3 次失败触发严重</p>
                 </div>
               </div>
             </TabsContent>
@@ -177,10 +177,10 @@ export default function Inspection() {
                     </div>
                     <p className="text-xs text-foreground/80">{a.description}</p>
                     <div className="mt-2 rounded-md bg-card border p-2.5">
-                      <p className="text-[11px] font-medium text-muted-foreground mb-1">知识问答 Agent 建议</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">知识问答 Agent 建议</p>
                       <p className="text-xs text-foreground/90 whitespace-pre-line">{a.suggestion}</p>
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-2">{a.time} · 阈值规则：{a.threshold}</p>
+                    <p className="text-xs text-muted-foreground mt-2">{a.time} · 阈值规则：{a.threshold}</p>
                   </div>
                 ))
               )}
@@ -192,7 +192,7 @@ export default function Inspection() {
                   <div key={t} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5">
                     <div>
                       <span className="text-sm font-medium">日常巡检 #{1024 - i}</span>
-                      <p className="text-[11px] text-muted-foreground">{t}</p>
+                      <p className="text-xs text-muted-foreground">{t}</p>
                     </div>
                     <StatusBadge tone={i === 0 ? statusTone(selected.status) : "success"}>
                       {i === 0 ? selected.status : "正常"}
@@ -249,7 +249,7 @@ function MetricRow({ icon: Icon, label, value, threshold, desc }: { icon: any; l
             <span className={`text-sm tabular-nums font-medium ${danger ? "text-destructive" : warn ? "text-warning" : ""}`}>{value}%</span>
           </div>
           <Progress value={value} className="mt-2 h-1.5" />
-          <p className="text-[11px] text-muted-foreground mt-1.5">{desc}</p>
+          <p className="text-xs text-muted-foreground mt-1.5">{desc}</p>
         </div>
       </div>
     </div>

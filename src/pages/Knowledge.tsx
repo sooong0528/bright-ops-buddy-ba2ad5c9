@@ -55,7 +55,7 @@ export default function Knowledge() {
             <h4 className="text-xs font-medium text-muted-foreground mb-2">热门标签</h4>
             <div className="flex flex-wrap gap-1.5">
               {["CPU", "MySQL", "MQ", "重启", "Linux", "网络", "Zabbix", "磁盘"].map((t) => (
-                <span key={t} className="text-[11px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer transition">
+                <span key={t} className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer transition">
                   {t}
                 </span>
               ))}
@@ -85,12 +85,12 @@ export default function Knowledge() {
                 <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{k.excerpt}</p>
                 <div className="flex flex-wrap gap-1 mb-3">
                   {k.tags.map((t) => (
-                    <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground inline-flex items-center gap-0.5">
+                    <span key={t} className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground inline-flex items-center gap-0.5">
                       <Tag className="h-2.5 w-2.5" />{t}
                     </span>
                   ))}
                 </div>
-                <div className="flex items-center justify-between pt-3 border-t text-[11px] text-muted-foreground">
+                <div className="flex items-center justify-between pt-3 border-t text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{k.updatedAt} · {k.version}</span>
                   <div className="flex items-center gap-2">
                     <span>{k.owner}</span>
@@ -124,7 +124,7 @@ function StatTile({ label, value, sub, tone }: { label: string; value: string; s
     <div className={`stat-card bg-gradient-to-br ${map[tone]}`}>
       <p className="text-xs text-muted-foreground font-medium">{label}</p>
       <p className="text-3xl font-semibold tabular-nums mt-1">{value}</p>
-      <p className="text-[11px] text-muted-foreground mt-1">{sub}</p>
+      <p className="text-xs text-muted-foreground mt-1">{sub}</p>
     </div>
   );
 }

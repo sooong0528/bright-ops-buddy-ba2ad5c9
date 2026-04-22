@@ -61,23 +61,26 @@ export default function Dashboard() {
     <div className="space-y-6">
       {/* Hero 概览条 */}
       <div className="rounded-2xl bg-gradient-hero p-6 md:p-8 text-primary-foreground shadow-elev-lg relative overflow-hidden">
-        <div className="absolute inset-0 data-grid opacity-10" />
+        <div className="absolute inset-0 mesh-bg opacity-60" />
+        <div className="absolute inset-0 data-grid opacity-[0.07]" />
+        <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary-glow/30 blur-3xl" />
+        <div className="absolute -left-10 -bottom-20 h-48 w-48 rounded-full bg-info/30 blur-3xl" />
         <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-xs font-medium opacity-90 mb-2">
-              <span className="h-2 w-2 rounded-full bg-success animate-pulse-soft" />
+            <div className="inline-flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full bg-white/15 backdrop-blur mb-3 border border-white/20">
+              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-soft" />
               平台运行正常 · Zabbix 7.0.21 已对接
             </div>
-            <h2 className="text-2xl md:text-3xl font-semibold">业务系统运维态势 · 2025-04-22</h2>
-            <p className="text-sm opacity-85 mt-1.5 max-w-2xl">
+            <h2 className="text-2xl md:text-3xl font-semibold tracking-tight">业务系统运维态势 · 2025-04-22</h2>
+            <p className="text-sm opacity-85 mt-2 max-w-2xl leading-relaxed">
               指挥调度 Agent 已完成今日 3 项巡检任务，识别 2 项异常与 2 项关注，建议优先处理 app-svc-01 与 mq-01。
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button asChild variant="secondary" className="bg-white/15 text-primary-foreground hover:bg-white/25 border-0 backdrop-blur">
+          <div className="flex gap-2 shrink-0">
+            <Button asChild variant="secondary" className="bg-white/15 text-primary-foreground hover:bg-white/25 border border-white/20 backdrop-blur">
               <Link to="/inspection">查看巡检</Link>
             </Button>
-            <Button asChild className="bg-white text-primary hover:bg-white/90">
+            <Button asChild className="bg-white text-primary hover:bg-white/95 shadow-lg">
               <Link to="/assistant">向助手提问 <ArrowUpRight className="ml-1 h-4 w-4" /></Link>
             </Button>
           </div>
@@ -95,7 +98,7 @@ export default function Dashboard() {
                   <span className="text-3xl font-semibold tabular-nums">{s.value}</span>
                   <span className="text-sm text-muted-foreground">{s.unit}</span>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1">较昨日 <span className="text-foreground font-medium">{s.delta}</span></p>
+                <p className="text-xs text-muted-foreground mt-1">较昨日 <span className="text-foreground font-medium">{s.delta}</span></p>
               </div>
               <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${toneClass[s.tone]}`}>
                 <s.icon className="h-5 w-5" />
@@ -119,8 +122,8 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={cpuTrend} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" fontSize={11} interval={3} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} domain={[0, 100]} />
+                <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" fontSize={12} interval={3} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} domain={[0, 100]} />
                 <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Line type="monotone" dataKey="app-svc-01" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
@@ -170,8 +173,8 @@ export default function Dashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" fontSize={10} interval={3} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} domain={[0, 100]} />
+                <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" fontSize={12} interval={3} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} domain={[0, 100]} />
                 <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                 <Area type="monotone" dataKey="used" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#memg)" />
               </AreaChart>
@@ -186,8 +189,8 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={weeklyAlertTrend} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="提示" stackId="a" fill="hsl(var(--info))" radius={[0, 0, 0, 0]} />
@@ -214,11 +217,11 @@ export default function Dashboard() {
                 <div className="flex flex-col flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium truncate">{h.name}</span>
-                    <span className="text-[10px] text-muted-foreground">{h.ip}</span>
+                    <span className="text-xs text-muted-foreground">{h.ip}</span>
                   </div>
-                  <span className="text-[11px] text-muted-foreground">{h.group}</span>
+                  <span className="text-xs text-muted-foreground">{h.group}</span>
                 </div>
-                <div className="hidden md:flex items-center gap-4 text-[11px] text-muted-foreground">
+                <div className="hidden md:flex items-center gap-4 text-xs text-muted-foreground">
                   <Metric icon={Cpu} value={`${h.cpu}%`} alert={h.cpu > 80} />
                   <Metric icon={MemoryStick} value={`${h.memory}%`} alert={h.memory > 80} />
                   <Metric icon={HardDrive} value={`${h.disk}%`} alert={h.disk > 75} />
@@ -241,8 +244,8 @@ export default function Dashboard() {
                     <span className="text-sm font-medium truncate">{a.host} · {a.metric}</span>
                     <StatusBadge tone={statusTone(a.severity)}>{a.severity}</StatusBadge>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{a.description}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">{a.time}</p>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.description}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{a.time}</p>
                 </div>
               ))}
             </div>
@@ -257,7 +260,7 @@ export default function Dashboard() {
                     <span className="text-sm font-medium truncate">{r.title}</span>
                     <StatusBadge tone="info">{r.type}</StatusBadge>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1">{r.generatedAt}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{r.generatedAt}</p>
                 </Link>
               ))}
             </div>

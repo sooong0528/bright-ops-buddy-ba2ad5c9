@@ -2,8 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 /* 智能运维平台 - 中性企业蓝设计系统
-   所有颜色必须使用 HSL */
+   所有颜色必须使用 HSL · 最小字号 12px */
 
 @layer base {
   :root {
@@ -47,32 +49,38 @@
     --info: 210 90% 50%;
     --info-soft: 210 90% 95%;
 
-    --border: 215 20% 88%;
-    --input: 215 20% 90%;
+    --border: 215 24% 90%;
+    --input: 215 20% 92%;
     --ring: 214 80% 36%;
 
-    --radius: 0.625rem;
+    --radius: 0.75rem;
 
     /* 渐变 */
-    --gradient-primary: linear-gradient(135deg, hsl(214 80% 36%), hsl(210 90% 48%));
+    --gradient-primary: linear-gradient(135deg, hsl(214 80% 36%), hsl(200 92% 52%));
     --gradient-surface: linear-gradient(180deg, hsl(210 40% 99%), hsl(215 30% 96%));
-    --gradient-hero: linear-gradient(135deg, hsl(214 80% 30%) 0%, hsl(200 85% 42%) 100%);
+    --gradient-hero: linear-gradient(120deg, hsl(218 75% 22%) 0%, hsl(214 78% 32%) 45%, hsl(196 85% 42%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(215 30% 98%));
+    --gradient-mesh:
+      radial-gradient(at 20% 0%, hsl(210 90% 56% / 0.18) 0px, transparent 50%),
+      radial-gradient(at 80% 100%, hsl(196 85% 50% / 0.15) 0px, transparent 50%),
+      radial-gradient(at 50% 50%, hsl(214 80% 36% / 0.10) 0px, transparent 50%);
 
-    /* 阴影 */
-    --shadow-sm: 0 1px 2px 0 hsl(215 25% 20% / 0.04);
-    --shadow-md: 0 2px 8px -2px hsl(215 30% 20% / 0.08), 0 1px 3px -1px hsl(215 30% 20% / 0.06);
-    --shadow-lg: 0 12px 32px -8px hsl(214 60% 25% / 0.12), 0 4px 12px -4px hsl(215 30% 20% / 0.06);
+    /* 阴影 - 更精致的层次 */
+    --shadow-sm: 0 1px 2px 0 hsl(215 30% 25% / 0.04), 0 1px 1px 0 hsl(215 30% 25% / 0.03);
+    --shadow-md: 0 4px 12px -2px hsl(215 35% 22% / 0.08), 0 2px 4px -1px hsl(215 30% 20% / 0.05);
+    --shadow-lg: 0 18px 40px -12px hsl(214 60% 22% / 0.18), 0 8px 16px -6px hsl(215 30% 20% / 0.08);
     --shadow-glow: 0 0 0 4px hsl(214 80% 36% / 0.12);
+    --shadow-ring: inset 0 0 0 1px hsl(215 25% 100% / 0.6);
 
     /* 侧边栏 */
-    --sidebar-background: 215 40% 14%;
+    --sidebar-background: 218 45% 12%;
     --sidebar-foreground: 215 20% 78%;
-    --sidebar-primary: 210 90% 56%;
+    --sidebar-primary: 200 95% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 215 35% 20%;
+    --sidebar-accent: 215 38% 18%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 215 35% 22%;
-    --sidebar-ring: 210 90% 56%;
+    --sidebar-border: 215 35% 20%;
+    --sidebar-ring: 200 95% 60%;
   }
 
   .dark {
@@ -102,26 +110,55 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
       "Segoe UI", Roboto, sans-serif;
-    font-feature-settings: "tnum";
+    font-feature-settings: "tnum", "cv11", "ss01";
+    /* 全局最小字号保护 12px */
+    font-size: 14px;
   }
   h1, h2, h3, h4 {
     @apply tracking-tight;
+    font-feature-settings: "ss01", "cv11";
+  }
+  /* 数字使用等宽 */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+  /* 等宽字体 */
+  .font-mono, code, pre {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 }
 
 @layer components {
   .stat-card {
-    @apply rounded-xl border bg-card p-5 shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)];
+    @apply relative rounded-xl border bg-card p-5 shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5;
+    background-image: var(--gradient-card);
+  }
+  .stat-card::before {
+    content: "";
+    @apply absolute inset-x-0 top-0 h-px rounded-t-xl;
+    background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.3), transparent);
   }
   .panel {
     @apply rounded-xl border bg-card shadow-[var(--shadow-sm)];
+    background-image: var(--gradient-card);
+  }
+  .panel-flat {
+    @apply rounded-xl border bg-card;
   }
   .data-grid {
     background-image: linear-gradient(hsl(var(--border) / 0.6) 1px, transparent 1px),
       linear-gradient(90deg, hsl(var(--border) / 0.6) 1px, transparent 1px);
     background-size: 24px 24px;
+  }
+  .mesh-bg {
+    background-image: var(--gradient-mesh);
+  }
+  /* 头部标题分隔线 */
+  .title-divider::after {
+    content: "";
+    @apply inline-block h-4 w-px bg-border mx-3 align-middle;
   }
 }

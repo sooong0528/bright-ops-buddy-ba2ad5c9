@@ -42,14 +42,14 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarContent className="bg-sidebar">
         {/* Logo 区 */}
-        <div className="flex items-center gap-2.5 px-4 py-5 border-b border-sidebar-border">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
+        <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
             <Activity className="h-5 w-5 text-primary-foreground" />
           </div>
           {!collapsed && (
-            <div className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold text-sidebar-accent-foreground">智能运维平台</span>
-              <span className="text-[10px] text-sidebar-foreground/70">SmartOps · v1.0</span>
+            <div className="flex flex-col leading-tight min-w-0">
+              <span className="text-base font-semibold text-sidebar-accent-foreground tracking-tight">智能运维平台</span>
+              <span className="text-xs text-sidebar-foreground/70 mt-0.5">SmartOps · v1.0</span>
             </div>
           )}
         </div>
@@ -101,12 +101,12 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {!collapsed && (
-          <div className="mt-auto p-4 m-3 rounded-lg bg-sidebar-accent/40 border border-sidebar-border">
+          <div className="mt-auto p-4 m-3 rounded-xl bg-sidebar-accent/40 border border-sidebar-border">
             <div className="flex items-center gap-2 mb-2">
               <span className="h-2 w-2 rounded-full bg-success animate-pulse-soft" />
-              <span className="text-xs font-medium text-sidebar-accent-foreground">Zabbix 7.0.21</span>
+              <span className="text-xs font-semibold text-sidebar-accent-foreground">Zabbix 7.0.21</span>
             </div>
-            <p className="text-[11px] leading-relaxed text-sidebar-foreground/70">
+            <p className="text-xs leading-relaxed text-sidebar-foreground/70">
               已接入 8 台主机 · CPU / 内存 / 磁盘 / Ping
             </p>
           </div>

@@ -53,7 +53,7 @@ export default function Reports() {
                     <StatusBadge tone={statusTone(r.status)}>{r.status}</StatusBadge>
                   </div>
                   <p className="text-xs text-muted-foreground line-clamp-2">{r.summary}</p>
-                  <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
+                  <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                     <StatusBadge tone="info">{r.type}</StatusBadge>
                     <span>{r.period}</span>
                     <span>· {r.author}</span>
@@ -122,14 +122,14 @@ export default function Reports() {
                     <Quote className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <p className="text-xs font-medium truncate">{c.t}</p>
-                      <p className="text-[11px] text-muted-foreground">{c.s}</p>
+                      <p className="text-xs text-muted-foreground">{c.s}</p>
                     </div>
                   </div>
                 ))}
               </div>
             </Section>
 
-            <div className="rounded-lg bg-muted/40 border border-dashed p-3 text-[11px] text-muted-foreground">
+            <div className="rounded-lg bg-muted/40 border border-dashed p-3 text-xs text-muted-foreground">
               本报告由报告生成 Agent 自动整理，已存入审计留痕。如需修改，请由具备相应权限的用户在草稿状态下进行调整。
             </div>
           </div>
