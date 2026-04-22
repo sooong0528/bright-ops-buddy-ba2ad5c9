@@ -95,7 +95,7 @@ export default function Dashboard() {
                   <span className="text-3xl font-semibold tabular-nums">{s.value}</span>
                   <span className="text-sm text-muted-foreground">{s.unit}</span>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1">较昨日 <span className="text-foreground font-medium">{s.delta}</span></p>
+                <p className="text-xs text-muted-foreground mt-1">较昨日 <span className="text-foreground font-medium">{s.delta}</span></p>
               </div>
               <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${toneClass[s.tone]}`}>
                 <s.icon className="h-5 w-5" />
@@ -214,11 +214,11 @@ export default function Dashboard() {
                 <div className="flex flex-col flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium truncate">{h.name}</span>
-                    <span className="text-[10px] text-muted-foreground">{h.ip}</span>
+                    <span className="text-xs text-muted-foreground">{h.ip}</span>
                   </div>
-                  <span className="text-[11px] text-muted-foreground">{h.group}</span>
+                  <span className="text-xs text-muted-foreground">{h.group}</span>
                 </div>
-                <div className="hidden md:flex items-center gap-4 text-[11px] text-muted-foreground">
+                <div className="hidden md:flex items-center gap-4 text-xs text-muted-foreground">
                   <Metric icon={Cpu} value={`${h.cpu}%`} alert={h.cpu > 80} />
                   <Metric icon={MemoryStick} value={`${h.memory}%`} alert={h.memory > 80} />
                   <Metric icon={HardDrive} value={`${h.disk}%`} alert={h.disk > 75} />
@@ -241,8 +241,8 @@ export default function Dashboard() {
                     <span className="text-sm font-medium truncate">{a.host} · {a.metric}</span>
                     <StatusBadge tone={statusTone(a.severity)}>{a.severity}</StatusBadge>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{a.description}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">{a.time}</p>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.description}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{a.time}</p>
                 </div>
               ))}
             </div>
@@ -257,7 +257,7 @@ export default function Dashboard() {
                     <span className="text-sm font-medium truncate">{r.title}</span>
                     <StatusBadge tone="info">{r.type}</StatusBadge>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1">{r.generatedAt}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{r.generatedAt}</p>
                 </Link>
               ))}
             </div>

@@ -65,7 +65,7 @@ export default function Assistant() {
             </div>
             <div>
               <h3 className="text-sm font-semibold">知识问答 Agent</h3>
-              <p className="text-[11px] text-muted-foreground">辅助决策 · 不直接执行生产写操作</p>
+              <p className="text-xs text-muted-foreground">辅助决策 · 不直接执行生产写操作</p>
             </div>
           </div>
           <StatusBadge tone="success" dot>在线</StatusBadge>
@@ -128,7 +128,7 @@ export default function Assistant() {
               <Send className="h-4 w-4" />
             </Button>
           </div>
-          <p className="text-[10px] text-muted-foreground mt-2">回答仅供参考，所有处理动作请由运维人员确认后执行 · 全过程留痕</p>
+          <p className="text-xs text-muted-foreground mt-2">回答仅供参考，所有处理动作请由运维人员确认后执行 · 全过程留痕</p>
         </div>
       </div>
 
@@ -145,10 +145,10 @@ export default function Assistant() {
                   <span className="text-xs font-medium leading-snug">{k.title}</span>
                   <StatusBadge tone="info" className="shrink-0">{k.category}</StatusBadge>
                 </div>
-                <p className="text-[11px] text-muted-foreground line-clamp-2">{k.excerpt}</p>
+                <p className="text-xs text-muted-foreground line-clamp-2">{k.excerpt}</p>
                 <div className="flex gap-1 mt-2 flex-wrap">
                   {k.tags.map((t) => (
-                    <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{t}</span>
+                    <span key={t} className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{t}</span>
                   ))}
                 </div>
               </div>
@@ -160,7 +160,7 @@ export default function Assistant() {
           <p className="text-xs font-medium text-primary mb-1.5 flex items-center gap-1.5">
             <Quote className="h-3 w-3" /> 平台原则
           </p>
-          <p className="text-[11px] leading-relaxed text-foreground/80">
+          <p className="text-xs leading-relaxed text-foreground/80">
             助手仅提供分析与建议，不直接执行重启服务、修改配置等生产写操作。所有问答均保留依据与来源。
           </p>
         </div>
@@ -195,7 +195,7 @@ function Message({ msg }: { msg: Msg }) {
           <ol className="space-y-1.5 ml-1">
             {msg.steps.map((s, i) => (
               <li key={i} className="flex gap-2 text-xs text-foreground/85">
-                <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-semibold shrink-0">{i + 1}</span>
+                <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold shrink-0">{i + 1}</span>
                 <span className="pt-0.5">{s}</span>
               </li>
             ))}
@@ -204,7 +204,7 @@ function Message({ msg }: { msg: Msg }) {
         {msg.citations && (
           <div className="flex flex-wrap gap-1.5">
             {msg.citations.map((c, i) => (
-              <span key={i} className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-accent text-accent-foreground border border-accent/30">
+              <span key={i} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-accent text-accent-foreground border border-accent/30">
                 <FileText className="h-3 w-3" /> {c.title}
               </span>
             ))}
