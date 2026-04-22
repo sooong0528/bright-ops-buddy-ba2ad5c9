@@ -110,26 +110,55 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
       "Segoe UI", Roboto, sans-serif;
-    font-feature-settings: "tnum";
+    font-feature-settings: "tnum", "cv11", "ss01";
+    /* 全局最小字号保护 12px */
+    font-size: 14px;
   }
   h1, h2, h3, h4 {
     @apply tracking-tight;
+    font-feature-settings: "ss01", "cv11";
+  }
+  /* 数字使用等宽 */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+  /* 等宽字体 */
+  .font-mono, code, pre {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 }
 
 @layer components {
   .stat-card {
-    @apply rounded-xl border bg-card p-5 shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)];
+    @apply relative rounded-xl border bg-card p-5 shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5;
+    background-image: var(--gradient-card);
+  }
+  .stat-card::before {
+    content: "";
+    @apply absolute inset-x-0 top-0 h-px rounded-t-xl;
+    background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.3), transparent);
   }
   .panel {
     @apply rounded-xl border bg-card shadow-[var(--shadow-sm)];
+    background-image: var(--gradient-card);
+  }
+  .panel-flat {
+    @apply rounded-xl border bg-card;
   }
   .data-grid {
     background-image: linear-gradient(hsl(var(--border) / 0.6) 1px, transparent 1px),
       linear-gradient(90deg, hsl(var(--border) / 0.6) 1px, transparent 1px);
     background-size: 24px 24px;
+  }
+  .mesh-bg {
+    background-image: var(--gradient-mesh);
+  }
+  /* 头部标题分隔线 */
+  .title-divider::after {
+    content: "";
+    @apply inline-block h-4 w-px bg-border mx-3 align-middle;
   }
 }
