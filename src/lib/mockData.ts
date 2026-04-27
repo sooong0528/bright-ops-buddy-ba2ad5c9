@@ -25,6 +25,27 @@ export interface InspectionTask {
   normal: number;
   attention: number;
   abnormal: number;
+  description?: string;
+  targets: string[]; // 主机组或主机
+  metrics: ("CPU" | "内存" | "磁盘" | "Ping")[];
+  enabled: boolean;
+  owner: string;
+  createdAt: string;
+}
+
+export interface InspectionRun {
+  id: string;
+  taskId: string;
+  startTime: string;
+  endTime: string;
+  duration: string; // 例如 "1m 12s"
+  status: "已完成" | "失败" | "运行中";
+  trigger: "定时" | "手动" | "API";
+  operator: string;
+  normal: number;
+  attention: number;
+  abnormal: number;
+  summary: string;
 }
 
 export interface AlertItem {
@@ -94,11 +115,31 @@ export const hosts: Host[] = [
 ];
 
 export const inspectionTasks: InspectionTask[] = [
-  { id: "t1", name: "全量主机日常巡检", type: "日常巡检", schedule: "每日 08:00", lastRun: "2025-04-22 08:00", status: "已完成", normal: 6, attention: 2, abnormal: 2 },
-  { id: "t2", name: "数据库专项巡检", type: "日常巡检", schedule: "每日 09:00", lastRun: "2025-04-22 09:00", status: "已完成", normal: 1, attention: 1, abnormal: 0 },
-  { id: "t3", name: "周度容量趋势巡检", type: "周巡检", schedule: "每周一 07:30", lastRun: "2025-04-21 07:30", status: "已完成", normal: 5, attention: 3, abnormal: 0 },
-  { id: "t4", name: "网络连通性巡检", type: "日常巡检", schedule: "每 30 分钟", lastRun: "2025-04-22 10:30", status: "运行中", normal: 7, attention: 0, abnormal: 1 },
-  { id: "t5", name: "手动 — 应急核查", type: "手动巡检", schedule: "—", lastRun: "2025-04-22 10:12", status: "已完成", normal: 4, attention: 1, abnormal: 1 },
+  { id: "t1", name: "全量主机日常巡检", type: "日常巡检", schedule: "每日 08:00", lastRun: "2025-04-22 08:00", status: "已完成", normal: 6, attention: 2, abnormal: 2, description: "对全部业务主机进行 CPU/内存/磁盘/Ping 四项基础指标巡检。", targets: ["全部主机组"], metrics: ["CPU", "内存", "磁盘", "Ping"], enabled: true, owner: "李管理", createdAt: "2025-01-10" },
+  { id: "t2", name: "数据库专项巡检", type: "日常巡检", schedule: "每日 09:00", lastRun: "2025-04-22 09:00", status: "已完成", normal: 1, attention: 1, abnormal: 0, description: "针对 MySQL 主从节点的资源使用情况进行专项核查。", targets: ["数据库"], metrics: ["CPU", "内存", "磁盘"], enabled: true, owner: "张运维", createdAt: "2025-02-03" },
+  { id: "t3", name: "周度容量趋势巡检", type: "周巡检", schedule: "每周一 07:30", lastRun: "2025-04-21 07:30", status: "已完成", normal: 5, attention: 3, abnormal: 0, description: "汇总一周磁盘容量与内存使用趋势，输出关注主机清单。", targets: ["全部主机组"], metrics: ["磁盘", "内存"], enabled: true, owner: "李管理", createdAt: "2025-01-15" },
+  { id: "t4", name: "网络连通性巡检", type: "日常巡检", schedule: "每 30 分钟", lastRun: "2025-04-22 10:30", status: "运行中", normal: 7, attention: 0, abnormal: 1, description: "高频次 ICMP 探测，及时发现节点失联。", targets: ["全部主机组"], metrics: ["Ping"], enabled: true, owner: "王巡检", createdAt: "2025-03-01" },
+  { id: "t5", name: "手动 — 应急核查", type: "手动巡检", schedule: "—", lastRun: "2025-04-22 10:12", status: "已完成", normal: 4, attention: 1, abnormal: 1, description: "应急场景下针对指定主机的临时核查任务。", targets: ["app-svc-01", "mq-01"], metrics: ["CPU", "内存", "Ping"], enabled: true, owner: "张运维", createdAt: "2025-04-22" },
+];
+
+// 任务执行历史（按 taskId 关联）
+export const inspectionRuns: InspectionRun[] = [
+  { id: "run-1024", taskId: "t1", startTime: "2025-04-22 08:00:02", endTime: "2025-04-22 08:01:14", duration: "1m 12s", status: "已完成", trigger: "定时", operator: "系统", normal: 6, attention: 2, abnormal: 2, summary: "app-svc-01 CPU 92%、mq-01 ICMP 失败，已生成异常摘要。" },
+  { id: "run-1023", taskId: "t1", startTime: "2025-04-21 08:00:01", endTime: "2025-04-21 08:01:08", duration: "1m 07s", status: "已完成", trigger: "定时", operator: "系统", normal: 7, attention: 1, abnormal: 0, summary: "db-master-01 内存 81%，触发关注。" },
+  { id: "run-1022", taskId: "t1", startTime: "2025-04-20 08:00:03", endTime: "2025-04-20 08:01:10", duration: "1m 07s", status: "已完成", trigger: "定时", operator: "系统", normal: 8, attention: 0, abnormal: 0, summary: "全部指标正常。" },
+  { id: "run-1021", taskId: "t1", startTime: "2025-04-19 08:00:00", endTime: "2025-04-19 08:01:21", duration: "1m 21s", status: "已完成", trigger: "定时", operator: "系统", normal: 7, attention: 1, abnormal: 0, summary: "app-web-02 CPU 短时升高至 73%。" },
+  { id: "run-1020", taskId: "t1", startTime: "2025-04-18 08:00:02", endTime: "2025-04-18 08:01:05", duration: "1m 03s", status: "失败", trigger: "定时", operator: "系统", normal: 0, attention: 0, abnormal: 0, summary: "Zabbix API 鉴权失败，任务中止。" },
+
+  { id: "run-2008", taskId: "t2", startTime: "2025-04-22 09:00:01", endTime: "2025-04-22 09:00:42", duration: "41s", status: "已完成", trigger: "定时", operator: "系统", normal: 1, attention: 1, abnormal: 0, summary: "db-master-01 内存升至 82%。" },
+  { id: "run-2007", taskId: "t2", startTime: "2025-04-21 09:00:00", endTime: "2025-04-21 09:00:38", duration: "38s", status: "已完成", trigger: "定时", operator: "系统", normal: 2, attention: 0, abnormal: 0, summary: "数据库节点全部正常。" },
+
+  { id: "run-3005", taskId: "t3", startTime: "2025-04-21 07:30:01", endTime: "2025-04-21 07:32:15", duration: "2m 14s", status: "已完成", trigger: "定时", operator: "系统", normal: 5, attention: 3, abnormal: 0, summary: "3 台主机磁盘使用率周环比上升 >5%。" },
+
+  { id: "run-4099", taskId: "t4", startTime: "2025-04-22 10:30:00", endTime: "—", duration: "进行中", status: "运行中", trigger: "定时", operator: "系统", normal: 7, attention: 0, abnormal: 1, summary: "mq-01 仍处于失联状态。" },
+  { id: "run-4098", taskId: "t4", startTime: "2025-04-22 10:00:00", endTime: "2025-04-22 10:00:18", duration: "18s", status: "已完成", trigger: "定时", operator: "系统", normal: 7, attention: 0, abnormal: 1, summary: "mq-01 ICMP 失败。" },
+  { id: "run-4097", taskId: "t4", startTime: "2025-04-22 09:30:00", endTime: "2025-04-22 09:30:16", duration: "16s", status: "已完成", trigger: "定时", operator: "系统", normal: 8, attention: 0, abnormal: 0, summary: "全部主机连通。" },
+
+  { id: "run-5001", taskId: "t5", startTime: "2025-04-22 10:12:33", endTime: "2025-04-22 10:13:45", duration: "1m 12s", status: "已完成", trigger: "手动", operator: "张运维", normal: 0, attention: 1, abnormal: 1, summary: "应急核查 app-svc-01 与 mq-01，确认异常持续。" },
 ];
 
 export const alerts: AlertItem[] = [
