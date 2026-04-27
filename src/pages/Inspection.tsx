@@ -20,6 +20,12 @@ import {
   ListChecks,
   Clock,
   User as UserIcon,
+  Sparkles,
+  Wand2,
+  Loader2,
+  GitMerge,
+  Lightbulb,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,6 +92,49 @@ import {
   type InspectionRun,
 } from "@/lib/mockData";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+
+/* ---------------- AI 类型与调用 ---------------- */
+
+type ParsedTask = {
+  name: string;
+  type: string;
+  schedule: string;
+  metrics: Metric[];
+  targets: string[];
+  owner: string;
+  description: string;
+  reasoning: string;
+};
+
+type MergeSuggestion = {
+  verdict: "merge" | "adjust" | "keep";
+  summary: string;
+  mergeIntoTaskId: string;
+  suggestedTask: {
+    name: string;
+    type: string;
+    schedule: string;
+    metrics: Metric[];
+    targets: string[];
+    description: string;
+  };
+  reasoning: string;
+  risks: string[];
+};
+
+async function callInspectionAi(payload: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke("inspection-ai", {
+    body: payload,
+  });
+  if (error) {
+    // edge function 内自定义错误信息
+    const msg = (data as any)?.error || error.message || "AI 调用失败";
+    throw new Error(msg);
+  }
+  if ((data as any)?.error) throw new Error((data as any).error);
+  return (data as any).result;
+}
 
 type Metric = "CPU" | "内存" | "磁盘" | "Ping";
 const METRICS: Metric[] = ["CPU", "内存", "磁盘", "Ping"];
