@@ -1,0 +1,4 @@
+project_id = "axhwverfpbilhvjblmoy"
+
+[functions.inspection-ai]
+verify_jwt = false
