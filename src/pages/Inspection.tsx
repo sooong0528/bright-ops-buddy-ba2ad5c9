@@ -363,6 +363,7 @@ export default function Inspection() {
         onOpenChange={setEditorOpen}
         task={editingTask}
         onSave={handleSave}
+        existingTasks={tasks}
       />
 
       {/* 任务详情（含执行历史） */}
@@ -452,18 +453,34 @@ function TaskEditorDialog({
   onOpenChange,
   task,
   onSave,
+  existingTasks,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   task: InspectionTask | null;
   onSave: (data: InspectionTask) => void;
+  existingTasks: InspectionTask[];
 }) {
   const isEdit = !!task;
   const [form, setForm] = useState<InspectionTask>(() => emptyForm());
 
+  // AI 自然语言生成
+  const [nlOpen, setNlOpen] = useState(false);
+  const [nlPrompt, setNlPrompt] = useState("");
+  const [nlLoading, setNlLoading] = useState(false);
+  const [nlReasoning, setNlReasoning] = useState<string>("");
+
+  // AI 合并建议
+  const [mergeLoading, setMergeLoading] = useState(false);
+  const [mergeResult, setMergeResult] = useState<MergeSuggestion | null>(null);
+
   // 当弹窗打开或目标任务变化时重置表单
   useMemo(() => {
-    if (open) setForm(task ? { ...task } : emptyForm());
+    if (open) {
+      setForm(task ? { ...task } : emptyForm());
+      setNlReasoning("");
+      setMergeResult(null);
+    }
   }, [open, task]);
 
   function emptyForm(): InspectionTask {
@@ -499,6 +516,92 @@ function TaskEditorDialog({
     }));
   }
 
+  async function handleNlGenerate() {
+    if (!nlPrompt.trim()) {
+      toast.error("请描述你希望的巡检规则");
+      return;
+    }
+    setNlLoading(true);
+    try {
+      const res = await callInspectionAi({ mode: "parse", prompt: nlPrompt });
+      const r = res as ParsedTask;
+      setForm((f) => ({
+        ...f,
+        name: r.name || f.name,
+        type: (r.type as any) || f.type,
+        schedule: r.schedule || f.schedule,
+        metrics: r.metrics?.length ? r.metrics : f.metrics,
+        targets: r.targets?.length ? r.targets : f.targets,
+        owner: r.owner || f.owner,
+        description: r.description || f.description,
+      }));
+      setNlReasoning(r.reasoning || "");
+      setMergeResult(null);
+      toast.success("已根据描述填充任务字段");
+      setNlOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message || "AI 生成失败");
+    } finally {
+      setNlLoading(false);
+    }
+  }
+
+  async function handleMergeCheck() {
+    if (!form.name.trim() || form.metrics.length === 0 || form.targets.length === 0) {
+      toast.error("请先完善任务名称、指标与目标，再请 AI 评估");
+      return;
+    }
+    setMergeLoading(true);
+    setMergeResult(null);
+    try {
+      const draft = {
+        name: form.name,
+        type: form.type,
+        schedule: form.schedule,
+        metrics: form.metrics,
+        targets: form.targets,
+        description: form.description ?? "",
+      };
+      const peers = existingTasks
+        .filter((t) => t.id !== form.id)
+        .map((t) => ({
+          id: t.id,
+          name: t.name,
+          type: t.type,
+          schedule: t.schedule,
+          metrics: t.metrics,
+          targets: t.targets,
+          description: t.description ?? "",
+        }));
+      const res = await callInspectionAi({
+        mode: "merge",
+        draft,
+        existingTasks: peers,
+      });
+      setMergeResult(res as MergeSuggestion);
+    } catch (e: any) {
+      toast.error(e?.message || "AI 评估失败");
+    } finally {
+      setMergeLoading(false);
+    }
+  }
+
+  function applySuggestion() {
+    if (!mergeResult) return;
+    const s = mergeResult.suggestedTask;
+    setForm((f) => ({
+      ...f,
+      name: s.name,
+      type: s.type as any,
+      schedule: s.schedule,
+      metrics: s.metrics,
+      targets: s.targets,
+      description: s.description,
+    }));
+    toast.success("已应用 AI 建议");
+    setMergeResult(null);
+  }
+
   function submit() {
     if (!form.name.trim()) {
       toast.error("请填写任务名称");
@@ -515,15 +618,84 @@ function TaskEditorDialog({
     onSave(form);
   }
 
+  const mergeTargetTask = mergeResult?.mergeIntoTaskId
+    ? existingTasks.find((t) => t.id === mergeResult.mergeIntoTaskId)
+    : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "编辑巡检任务" : "新建巡检任务"}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            {isEdit ? "编辑巡检任务" : "新建巡检任务"}
+          </DialogTitle>
           <DialogDescription>
-            配置巡检的目标范围、指标项与调度策略；保存后将由指挥调度 Agent 接管编排。
+            可手工配置，也可通过自然语言让 AI 生成草稿；保存前可让 AI 评估与现有规则的重叠情况。
           </DialogDescription>
         </DialogHeader>
+
+        {/* AI 工具条 */}
+        <div className="rounded-lg border border-primary/20 bg-primary-soft/30 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="font-medium">AI 助手</span>
+              <span className="text-xs text-muted-foreground">由 Lovable AI 提供</span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setNlOpen((v) => !v)}
+              >
+                <Wand2 className="h-4 w-4 mr-1" />
+                自然语言生成
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleMergeCheck}
+                disabled={mergeLoading}
+              >
+                {mergeLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <GitMerge className="h-4 w-4 mr-1" />}
+                评估合并建议
+              </Button>
+            </div>
+          </div>
+
+          {nlOpen && (
+            <div className="space-y-2 pt-1">
+              <Textarea
+                rows={3}
+                placeholder="例如：每天早上 7 点对数据库主机做一次内存和磁盘巡检，由 DBA 负责"
+                value={nlPrompt}
+                onChange={(e) => setNlPrompt(e.target.value)}
+              />
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setNlOpen(false)}>取消</Button>
+                <Button size="sm" onClick={handleNlGenerate} disabled={nlLoading}>
+                  {nlLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                  生成草稿
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {nlReasoning && !nlOpen && (
+            <div className="rounded-md bg-card border p-2.5 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">AI 推断说明：</span>{nlReasoning}
+            </div>
+          )}
+
+          {mergeResult && (
+            <MergeSuggestionCard
+              suggestion={mergeResult}
+              targetTask={mergeTargetTask}
+              onApply={applySuggestion}
+              onDismiss={() => setMergeResult(null)}
+            />
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2">
@@ -635,6 +807,89 @@ function TaskEditorDialog({
     </Dialog>
   );
 }
+
+/* ---------------- AI 合并建议卡片 ---------------- */
+
+function MergeSuggestionCard({
+  suggestion,
+  targetTask,
+  onApply,
+  onDismiss,
+}: {
+  suggestion: MergeSuggestion;
+  targetTask: InspectionTask | null | undefined;
+  onApply: () => void;
+  onDismiss: () => void;
+}) {
+  const verdictMap: Record<string, { label: string; tone: "success" | "warning" | "destructive" | "info" }> = {
+    keep: { label: "无冲突", tone: "success" },
+    adjust: { label: "建议调整", tone: "warning" },
+    merge: { label: "建议合并", tone: "destructive" },
+  };
+  const v = verdictMap[suggestion.verdict] ?? verdictMap.keep;
+
+  return (
+    <div className="rounded-md border bg-card p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Lightbulb className="h-4 w-4 text-warning" />
+          <span className="text-sm font-semibold">AI 评估结果</span>
+          <StatusBadge tone={v.tone}>{v.label}</StatusBadge>
+        </div>
+        <Button size="sm" variant="ghost" onClick={onDismiss}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      <p className="text-sm text-foreground/90">{suggestion.summary}</p>
+
+      {suggestion.verdict === "merge" && targetTask && (
+        <div className="rounded-md bg-secondary/50 px-2.5 py-2 text-xs">
+          <span className="text-muted-foreground">建议合并到现有任务：</span>
+          <span className="font-medium ml-1">{targetTask.name}</span>
+          <span className="text-muted-foreground ml-2">({targetTask.schedule})</span>
+        </div>
+      )}
+
+      {suggestion.reasoning && (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer hover:text-foreground">查看推理过程</summary>
+          <p className="mt-1.5 whitespace-pre-line leading-relaxed">{suggestion.reasoning}</p>
+        </details>
+      )}
+
+      {suggestion.risks?.length > 0 && (
+        <div className="text-xs">
+          <div className="text-muted-foreground mb-1">潜在风险</div>
+          <ul className="list-disc list-inside space-y-0.5 text-foreground/80">
+            {suggestion.risks.map((r, i) => <li key={i}>{r}</li>)}
+          </ul>
+        </div>
+      )}
+
+      <div className="rounded-md border bg-background p-2.5 space-y-1">
+        <div className="text-xs font-medium text-muted-foreground">建议任务字段</div>
+        <div className="text-sm font-medium">{suggestion.suggestedTask.name}</div>
+        <div className="text-xs text-muted-foreground">
+          {suggestion.suggestedTask.type} · {suggestion.suggestedTask.schedule}
+        </div>
+        <div className="flex flex-wrap gap-1 pt-1">
+          {suggestion.suggestedTask.metrics.map((m) => (
+            <span key={m} className="text-xs rounded bg-secondary px-1.5 py-0.5">{m}</span>
+          ))}
+          {suggestion.suggestedTask.targets.map((t) => (
+            <span key={t} className="text-xs rounded bg-primary-soft text-primary px-1.5 py-0.5">{t}</span>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-1">
+        <Button size="sm" variant="ghost" onClick={onDismiss}>忽略</Button>
+        <Button size="sm" onClick={onApply}>应用建议</Button>
+      </div>
+    </div>
+  );
+}
+
 
 /* ---------------- 任务详情抽屉（含历史） ---------------- */
 
