@@ -38,8 +38,8 @@ export default function AppLayout() {
             </div>
             <div className="ml-auto flex items-center gap-2">
               <div className="relative hidden md:block">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="搜索主机 / 知识 / 报告" className="w-64 pl-8 h-9 bg-secondary/60 border-transparent focus-visible:bg-card focus-visible:border-border" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input placeholder="搜索主机 / 知识 / 报告" className="w-64 pl-8 h-8 bg-secondary border-transparent focus-visible:bg-card focus-visible:border-primary" />
               </div>
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-4 w-4" />
