@@ -6,6 +6,7 @@ import {
   BookOpen,
   Users,
   ScrollText,
+  Activity,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -33,24 +34,28 @@ const manageItems = [
   { title: "审计留痕", url: "/audit", icon: ScrollText },
 ];
 
-/**
- * 左侧主菜单 - 规范 §3
- * 一级导航 · 浅色专业 SaaS · 选中态使用主题色 #00C1BE
- * Logo 已迁移到顶部品牌通栏，此处仅承载导航
- */
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-      <SidebarContent className="bg-sidebar pt-3">
-        <SidebarGroup>
+      <SidebarContent className="bg-sidebar">
+        {/* Logo 区 */}
+        <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
+            <Activity className="h-5 w-5 text-primary-foreground" />
+          </div>
           {!collapsed && (
-            <SidebarGroupLabel className="text-muted-foreground/80 text-xs font-medium px-3">
-              运维工作台
-            </SidebarGroupLabel>
+            <div className="flex flex-col leading-tight min-w-0">
+              <span className="text-base font-semibold text-sidebar-accent-foreground tracking-tight">智能运维平台</span>
+              <span className="text-xs text-sidebar-foreground/70 mt-0.5">SmartOps · v1.0</span>
+            </div>
           )}
+        </div>
+
+        <SidebarGroup>
+          {!collapsed && <SidebarGroupLabel className="text-sidebar-foreground/60">运维工作台</SidebarGroupLabel>}
           <SidebarGroupContent>
             <SidebarMenu>
               {mainItems.map((item) => (
@@ -59,11 +64,11 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       end
-                      className="text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground rounded-sm h-9"
-                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium border-l-[3px] border-sidebar-primary"
+                      className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground border-l-2 border-sidebar-primary"
                     >
-                      <item.icon className="h-[18px] w-[18px] shrink-0" />
-                      {!collapsed && <span className="text-sm">{item.title}</span>}
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {!collapsed && <span>{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -73,11 +78,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          {!collapsed && (
-            <SidebarGroupLabel className="text-muted-foreground/80 text-xs font-medium px-3">
-              配置与管理
-            </SidebarGroupLabel>
-          )}
+          {!collapsed && <SidebarGroupLabel className="text-sidebar-foreground/60">配置与管理</SidebarGroupLabel>}
           <SidebarGroupContent>
             <SidebarMenu>
               {manageItems.map((item) => (
@@ -86,11 +87,11 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       end
-                      className="text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground rounded-sm h-9"
-                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium border-l-[3px] border-sidebar-primary"
+                      className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground border-l-2 border-sidebar-primary"
                     >
-                      <item.icon className="h-[18px] w-[18px] shrink-0" />
-                      {!collapsed && <span className="text-sm">{item.title}</span>}
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {!collapsed && <span>{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -100,13 +101,13 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {!collapsed && (
-          <div className="mt-auto p-3 mx-3 mb-3 rounded border border-border bg-secondary/60">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-success" />
-              <span className="text-xs font-semibold text-foreground">Zabbix 7.0.21</span>
+          <div className="mt-auto p-4 m-3 rounded-xl bg-sidebar-accent/40 border border-sidebar-border">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="h-2 w-2 rounded-full bg-success animate-pulse-soft" />
+              <span className="text-xs font-semibold text-sidebar-accent-foreground">Zabbix 7.0.21</span>
             </div>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              已接入 8 台主机
+            <p className="text-xs leading-relaxed text-sidebar-foreground/70">
+              已接入 8 台主机 · CPU / 内存 / 磁盘 / Ping
             </p>
           </div>
         )}

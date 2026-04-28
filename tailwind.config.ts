@@ -72,11 +72,6 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        topbar: {
-          DEFAULT: "hsl(var(--topbar-background))",
-          foreground: "hsl(var(--topbar-foreground))",
-          border: "hsl(var(--topbar-border))",
-        },
       },
       backgroundImage: {
         "gradient-primary": "var(--gradient-primary)",
@@ -90,21 +85,9 @@ export default {
         glow: "var(--shadow-glow)",
       },
       borderRadius: {
-        /* AntD: sm 4 / base 6 / lg 8 */
-        lg: "calc(var(--radius) + 2px)",
-        md: "var(--radius)",
-        sm: "calc(var(--radius) - 2px)",
-      },
-      fontSize: {
-        /* AntD type scale */
-        xs: ["12px", { lineHeight: "20px" }],
-        sm: ["13px", { lineHeight: "20px" }],
-        base: ["14px", { lineHeight: "22px" }],
-        lg: ["16px", { lineHeight: "24px" }],
-        xl: ["20px", { lineHeight: "28px" }],
-        "2xl": ["24px", { lineHeight: "32px" }],
-        "3xl": ["30px", { lineHeight: "38px" }],
-        "4xl": ["38px", { lineHeight: "46px" }],
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
       },
       keyframes: {
         "accordion-down": { from: { height: "0" }, to: { height: "var(--radix-accordion-content-height)" } },

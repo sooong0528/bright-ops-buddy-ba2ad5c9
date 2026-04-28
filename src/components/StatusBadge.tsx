@@ -3,11 +3,11 @@ import { cn } from "@/lib/utils";
 type Tone = "success" | "warning" | "destructive" | "info" | "muted";
 
 const toneMap: Record<Tone, string> = {
-  success: "bg-success-soft text-success border-success/30",
-  warning: "bg-warning-soft text-warning border-warning/30",
-  destructive: "bg-destructive-soft text-destructive border-destructive/30",
-  info: "bg-info-soft text-info border-info/30",
-  muted: "bg-secondary text-muted-foreground border-border",
+  success: "bg-success-soft text-success border-success/20",
+  warning: "bg-warning-soft text-warning border-warning/20",
+  destructive: "bg-destructive-soft text-destructive border-destructive/20",
+  info: "bg-info-soft text-info border-info/20",
+  muted: "bg-muted text-muted-foreground border-border",
 };
 
 interface Props {
@@ -21,7 +21,7 @@ export function StatusBadge({ tone = "muted", children, dot = false, className }
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-sm border px-2 py-px text-xs font-normal leading-5",
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
         toneMap[tone],
         className
       )}
