@@ -3,10 +3,11 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /* AntD Table：表头浅灰底 #FAFAFA / 行高 54 / hover 行高亮 / 单元格 16 内边距 */
+/* 表格规范 §9：隔行变色 / 表头浅灰 / 文字垂直居中 / 长文本省略 + hover tooltip / hover 行高亮 */
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
     <div className="relative w-full overflow-auto">
-      <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
+      <table ref={ref} className={cn("w-full caption-bottom text-sm table-zebra", className)} {...props} />
     </div>
   ),
 );
