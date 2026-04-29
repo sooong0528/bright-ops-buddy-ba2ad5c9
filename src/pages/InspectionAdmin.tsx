@@ -125,6 +125,9 @@ export default function InspectionAdmin() {
   const [editingTask, setEditingTask] = useState<InspectionTask | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"tasks" | "rules">("tasks");
+  const [ruleCreateSignal, setRuleCreateSignal] = useState(0);
+
 
   const detailTask = tasks.find((t) => t.id === detailTaskId) || null;
 
