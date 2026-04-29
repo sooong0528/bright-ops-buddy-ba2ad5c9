@@ -304,33 +304,6 @@ export default function Reports() {
                   </div>
                 </div>
               </div>
-
-              <div className="p-6">
-                <ReportHeader report={selected} />
-                <div className="mt-5 space-y-5 text-sm leading-relaxed">
-                  {selected.category === "巡检质量报告" && <QualityReport report={selected} />}
-                  {selected.category === "风险研判报告" && <RiskReport report={selected} />}
-                  {selected.category === "知识服务报告" && <KnowledgeReport report={selected} />}
-
-                  {/* 人工备注 */}
-                  <Section title={<span className="flex items-center gap-1.5"><StickyNote className="h-4 w-4 text-primary" />人工备注</span>}>
-                    <Textarea
-                      value={selMeta.note}
-                      onChange={(e) => updateMeta(selected.id, { note: e.target.value })}
-                      placeholder="补充人工分析、处置情况、领导批示等内容…"
-                      className="min-h-[88px] text-sm"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1.5">
-                      备注会随报告一并归档留痕，仅当前用户可见。
-                    </p>
-                  </Section>
-
-                  <div className="rounded-lg bg-muted/40 border border-dashed p-3 text-xs text-muted-foreground flex items-start gap-2">
-                    <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
-                    <span>本报告由报告生成 Agent 自动整理，已存入审计留痕。如需修改，请由具备相应权限的用户在草稿状态下进行调整。</span>
-                  </div>
-                </div>
-              </div>
             </>
           )}
         </SheetContent>
