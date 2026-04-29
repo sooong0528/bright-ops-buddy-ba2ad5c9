@@ -114,7 +114,7 @@ function emptyRule(): MetricRule {
   };
 }
 
-export function JudgmentRulesPanel() {
+export function JudgmentRulesPanel({ createSignal = 0 }: { createSignal?: number } = {}) {
   const [rules, setRules] = useState<MetricRule[]>(initialRules);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<MetricRule | null>(null);
@@ -126,6 +126,12 @@ export function JudgmentRulesPanel() {
 
   function openCreate() { setEditing(null); setEditorOpen(true); }
   function openEdit(r: MetricRule) { setEditing(r); setEditorOpen(true); }
+
+  // 外部触发新增
+  useEffect(() => {
+    if (createSignal > 0) openCreate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createSignal]);
 
   function handleSave(data: MetricRule) {
     const today = new Date().toISOString().slice(0, 10);
@@ -159,19 +165,6 @@ export function JudgmentRulesPanel() {
         <SummaryCard icon={<Settings className="h-4 w-4 text-primary" />} title="监测指标" count={rules.length} desc="按监测指标组织判定规则，每个指标可配置多条条件" />
         <SummaryCard icon={<AlertCircle className="h-4 w-4 text-destructive" />} title="异常条件" count={abnormalCount} desc="优先依赖 Zabbix Trigger / Problem 触发判定" />
         <SummaryCard icon={<Eye className="h-4 w-4 text-warning" />} title="关注条件" count={attentionCount} desc="智慧运维自定义阈值或趋势规则，提示值班关注" />
-      </div>
-
-      {/* 标题栏 */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h3 className="font-semibold text-base">巡检判定规则</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            按监测指标组织：同一指标下可同时配置「异常」与「关注」多个条件，命中高优先级即生效
-          </p>
-        </div>
-        <Button className="bg-primary" onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-1" />新增指标规则
-        </Button>
       </div>
 
       {/* 规则卡片列表 */}
