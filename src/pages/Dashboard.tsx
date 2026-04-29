@@ -258,7 +258,7 @@ export default function Dashboard() {
                 <Link key={r.id} to="/reports" className="block rounded-lg border bg-card/50 px-3 py-2 hover:border-primary/40 hover:bg-primary-soft/30 transition">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium truncate">{r.title}</span>
-                    <StatusBadge tone="info">{r.type}</StatusBadge>
+                    <StatusBadge tone="info">{r.frequency}</StatusBadge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">{r.generatedAt}</p>
                 </Link>
