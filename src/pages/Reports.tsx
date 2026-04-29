@@ -3,8 +3,11 @@ import { useNavigate } from "react-router-dom";
 import {
   FileText, Download, Plus, Calendar, Filter,
   ShieldCheck, AlertTriangle, BookOpen, TrendingUp,
-  Sparkles, Search, Star, Archive, MessageSquare, StickyNote, ArchiveRestore,
+  Sparkles, Search, Star, Archive, MessageSquare, StickyNote, ArchiveRestore, MoreHorizontal,
 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -217,14 +220,38 @@ export default function Reports() {
                     </div>
                     <div className="flex items-center justify-between mt-2.5 text-xs text-muted-foreground">
                       <span>周期 {r.period} · {r.generatedAt}</span>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2 -mr-1 text-primary hover:text-primary hover:bg-primary-soft"
-                        onClick={(e) => handleExport(r, e)}
-                      >
-                        <Download className="h-3.5 w-3.5 mr-1" />导出
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 -mr-1 text-muted-foreground hover:text-foreground"
+                            aria-label="更多操作"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleExport(r); }}>
+                            <Download className="h-4 w-4 mr-2" />导出
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleFollowup(r); }}>
+                            <MessageSquare className="h-4 w-4 mr-2" />追问
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleToggleImportant(r); }}>
+                            <Star className={cn("h-4 w-4 mr-2", m.important && "fill-warning text-warning")} />
+                            {m.important ? "取消重要" : "标记重要"}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleArchive(r); }}>
+                            {m.archived ? (
+                              <><ArchiveRestore className="h-4 w-4 mr-2" />恢复</>
+                            ) : (
+                              <><Archive className="h-4 w-4 mr-2" />归档</>
+                            )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </div>
@@ -243,34 +270,16 @@ export default function Reports() {
                 <SheetTitle>{selected.title}</SheetTitle>
               </SheetHeader>
 
-              {/* 操作栏（吸顶） */}
-              <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-6 py-3 flex items-center gap-2 flex-wrap">
-                <Button size="sm" onClick={() => handleExport(selected)}>
-                  <Download className="h-4 w-4 mr-1" />导出
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => handleFollowup(selected)}>
-                  <MessageSquare className="h-4 w-4 mr-1" />追问
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleToggleImportant(selected)}
-                  className={cn(selMeta.important && "border-warning/50 text-warning hover:text-warning")}
-                >
-                  <Star className={cn("h-4 w-4 mr-1", selMeta.important && "fill-warning")} />
-                  {selMeta.important ? "已标记重要" : "标记重要"}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => handleArchive(selected)}>
-                  {selMeta.archived ? (
-                    <><ArchiveRestore className="h-4 w-4 mr-1" />恢复</>
-                  ) : (
-                    <><Archive className="h-4 w-4 mr-1" />归档</>
-                  )}
-                </Button>
-              </div>
-
               <div className="p-6">
-                <ReportHeader report={selected} />
+                <ReportHeader
+                  report={selected}
+                  important={selMeta.important}
+                  archived={selMeta.archived}
+                  onExport={() => handleExport(selected)}
+                  onFollowup={() => handleFollowup(selected)}
+                  onToggleImportant={() => handleToggleImportant(selected)}
+                  onArchive={() => handleArchive(selected)}
+                />
                 <div className="mt-5 space-y-5 text-sm leading-relaxed">
                   {selected.category === "巡检质量报告" && <QualityReport report={selected} />}
                   {selected.category === "风险研判报告" && <RiskReport report={selected} />}
@@ -285,13 +294,13 @@ export default function Reports() {
                       className="min-h-[88px] text-sm"
                     />
                     <p className="text-xs text-muted-foreground mt-1.5">
-                      备注会随报告一并归档留痕，仅当前用户可见。
+                      备注会随报告一并归档留痕,仅当前用户可见。
                     </p>
                   </Section>
 
                   <div className="rounded-lg bg-muted/40 border border-dashed p-3 text-xs text-muted-foreground flex items-start gap-2">
                     <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
-                    <span>本报告由报告生成 Agent 自动整理，已存入审计留痕。如需修改，请由具备相应权限的用户在草稿状态下进行调整。</span>
+                    <span>本报告由报告生成 Agent 自动整理,已存入审计留痕。如需修改,请由具备相应权限的用户在草稿状态下进行调整。</span>
                   </div>
                 </div>
               </div>
@@ -320,7 +329,18 @@ export default function Reports() {
 }
 
 /* ---------- 报告头 ---------- */
-function ReportHeader({ report }: { report: ReportItem }) {
+function ReportHeader({
+  report, important, archived,
+  onExport, onFollowup, onToggleImportant, onArchive,
+}: {
+  report: ReportItem;
+  important: boolean;
+  archived: boolean;
+  onExport: () => void;
+  onFollowup: () => void;
+  onToggleImportant: () => void;
+  onArchive: () => void;
+}) {
   const meta = categoryMeta[report.category];
   const Icon = meta.icon;
   return (
@@ -334,7 +354,38 @@ function ReportHeader({ report }: { report: ReportItem }) {
           <StatusBadge tone="muted">{report.frequency}</StatusBadge>
           <StatusBadge tone={statusTone(report.status)}>{report.status}</StatusBadge>
         </div>
-        <h2 className="text-xl font-semibold leading-snug">{report.title}</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-xl font-semibold leading-snug min-w-0 flex-1">{report.title}</h2>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button size="sm" onClick={onExport}>
+              <Download className="h-4 w-4 mr-1" />导出
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="h-9 w-9 p-0" aria-label="更多操作">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onFollowup}>
+                  <MessageSquare className="h-4 w-4 mr-2" />追问
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onToggleImportant}>
+                  <Star className={cn("h-4 w-4 mr-2", important && "fill-warning text-warning")} />
+                  {important ? "取消重要" : "标记重要"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onArchive}>
+                  {archived ? (
+                    <><ArchiveRestore className="h-4 w-4 mr-2" />恢复</>
+                  ) : (
+                    <><Archive className="h-4 w-4 mr-2" />归档</>
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
         <p className="text-xs text-muted-foreground mt-1">
           {meta.desc} · 周期 {report.period} · 生成于 {report.generatedAt} · 由 {report.author} 输出
         </p>
