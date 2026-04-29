@@ -329,7 +329,18 @@ export default function Reports() {
 }
 
 /* ---------- 报告头 ---------- */
-function ReportHeader({ report }: { report: ReportItem }) {
+function ReportHeader({
+  report, important, archived,
+  onExport, onFollowup, onToggleImportant, onArchive,
+}: {
+  report: ReportItem;
+  important: boolean;
+  archived: boolean;
+  onExport: () => void;
+  onFollowup: () => void;
+  onToggleImportant: () => void;
+  onArchive: () => void;
+}) {
   const meta = categoryMeta[report.category];
   const Icon = meta.icon;
   return (
@@ -343,7 +354,38 @@ function ReportHeader({ report }: { report: ReportItem }) {
           <StatusBadge tone="muted">{report.frequency}</StatusBadge>
           <StatusBadge tone={statusTone(report.status)}>{report.status}</StatusBadge>
         </div>
-        <h2 className="text-xl font-semibold leading-snug">{report.title}</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-xl font-semibold leading-snug min-w-0 flex-1">{report.title}</h2>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button size="sm" onClick={onExport}>
+              <Download className="h-4 w-4 mr-1" />导出
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="h-9 w-9 p-0" aria-label="更多操作">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onFollowup}>
+                  <MessageSquare className="h-4 w-4 mr-2" />追问
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onToggleImportant}>
+                  <Star className={cn("h-4 w-4 mr-2", important && "fill-warning text-warning")} />
+                  {important ? "取消重要" : "标记重要"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onArchive}>
+                  {archived ? (
+                    <><ArchiveRestore className="h-4 w-4 mr-2" />恢复</>
+                  ) : (
+                    <><Archive className="h-4 w-4 mr-2" />归档</>
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
         <p className="text-xs text-muted-foreground mt-1">
           {meta.desc} · 周期 {report.period} · 生成于 {report.generatedAt} · 由 {report.author} 输出
         </p>
