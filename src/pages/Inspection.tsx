@@ -222,50 +222,72 @@ export default function Inspection() {
           </Table>
         </div>
 
-        {/* 异常追踪 */}
-        <div className="panel p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-sm">异常追踪</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">需要关注与处置的主机</p>
-            </div>
-            <span className="text-xs text-muted-foreground">{abnormalHosts.length} 台</span>
-          </div>
-
-          <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-            {abnormalHosts.length === 0 ? (
-              <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
-                当前无异常 ✓
+        {/* 右侧：异常追踪 + 巡检发现的告警 */}
+        <div className="space-y-4">
+          {/* 异常追踪 */}
+          <div className="panel p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-sm">异常追踪</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">需要关注与处置的主机</p>
               </div>
-            ) : (
-              abnormalHosts.map((h) => (
-                <div key={h.id} className="rounded-lg border bg-card p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium truncate">{h.name}</span>
-                    <StatusBadge tone={statusTone(h.status)} dot={h.status === "异常"}>{h.status}</StatusBadge>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">{h.ip} · {h.group}</div>
+              <span className="text-xs text-muted-foreground tabular-nums">共 {abnormalHosts.length} 台</span>
+            </div>
+
+            <div className="space-y-2">
+              {abnormalHosts.length === 0 ? (
+                <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
+                  当前无异常 ✓
                 </div>
-              ))
-            )}
+              ) : (
+                abnormalHosts.map((h) => (
+                  <div key={h.id} className="rounded-lg border bg-card p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium truncate">{h.name}</span>
+                      <StatusBadge tone={statusTone(h.status)} dot={h.status === "异常"}>{h.status}</StatusBadge>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">{h.ip} · {h.group}</div>
+                    <div className="mt-2 grid grid-cols-4 gap-2 text-xs tabular-nums text-muted-foreground">
+                      <span>CPU <span className="text-foreground">{h.cpu}%</span></span>
+                      <span>内存 <span className="text-foreground">{h.memory}%</span></span>
+                      <span>磁盘 <span className="text-foreground">{h.disk}%</span></span>
+                      <span>Ping <span className="text-foreground">{h.ping > 100 ? "超时" : `${h.ping}ms`}</span></span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              <h4 className="font-semibold text-sm">巡检发现的告警</h4>
+          {/* 巡检发现的告警 */}
+          <div className="panel p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <h3 className="font-semibold text-sm">巡检发现的告警</h3>
+              </div>
+              <span className="text-xs text-muted-foreground tabular-nums">共 {alerts.length} 条</span>
             </div>
-            <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
-              {alerts.map((a) => (
-                <div key={a.id} className="rounded-lg border-l-2 border-destructive bg-destructive-soft/30 p-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold">{a.host} · {a.metric}</span>
-                    <StatusBadge tone={statusTone(a.severity)}>{a.severity}</StatusBadge>
-                  </div>
-                  <p className="text-xs text-foreground/80 mt-1 line-clamp-2">{a.description}</p>
-                  <p className="text-xs text-muted-foreground mt-1 tabular-nums">{a.time}</p>
+            <div className="space-y-2">
+              {alerts.length === 0 ? (
+                <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
+                  当前无告警 ✓
                 </div>
-              ))}
+              ) : (
+                alerts.map((a) => (
+                  <div key={a.id} className="rounded-lg border-l-2 border-destructive bg-destructive-soft/30 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold truncate">{a.host} · {a.metric}</span>
+                      <StatusBadge tone={statusTone(a.severity)}>{a.severity}</StatusBadge>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      当前值：<span className="text-foreground font-medium tabular-nums">{a.value}</span>
+                    </div>
+                    <p className="text-xs text-foreground/80 mt-1.5 leading-relaxed">{a.description}</p>
+                    <p className="text-xs text-muted-foreground mt-1.5 tabular-nums">{a.time}</p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
