@@ -7,6 +7,7 @@ import {
   Users,
   ScrollText,
   Activity,
+  Settings2,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -29,6 +30,7 @@ const mainItems = [
 ];
 
 const manageItems = [
+  { title: "巡检管理", url: "/inspection-admin", icon: Settings2 },
   { title: "知识库管理", url: "/knowledge", icon: BookOpen },
   { title: "用户与权限", url: "/users", icon: Users },
   { title: "审计留痕", url: "/audit", icon: ScrollText },
