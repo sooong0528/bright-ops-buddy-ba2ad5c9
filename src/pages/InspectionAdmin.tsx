@@ -76,7 +76,9 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
+import { JudgmentRulesPanel } from "@/components/JudgmentRulesPanel";
 import {
   inspectionTasks as initialTasks,
   inspectionRuns as initialRuns,
