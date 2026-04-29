@@ -3,8 +3,11 @@ import { useNavigate } from "react-router-dom";
 import {
   FileText, Download, Plus, Calendar, Filter,
   ShieldCheck, AlertTriangle, BookOpen, TrendingUp,
-  Sparkles, Search, Star, Archive, MessageSquare, StickyNote, ArchiveRestore,
+  Sparkles, Search, Star, Archive, MessageSquare, StickyNote, ArchiveRestore, MoreHorizontal,
 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
