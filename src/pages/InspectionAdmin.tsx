@@ -280,7 +280,7 @@ export default function InspectionAdmin() {
         </TabsContent>
 
         <TabsContent value="rules" className="mt-0">
-          <JudgmentRulesPanel />
+          <JudgmentRulesPanel createSignal={ruleCreateSignal} />
         </TabsContent>
       </Tabs>
 
