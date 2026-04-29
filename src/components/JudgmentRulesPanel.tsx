@@ -268,12 +268,9 @@ function RuleEditorDialog({
 }) {
   const [form, setForm] = useState<JudgmentRule>(emptyRule());
 
-  // reset on open
-  useState(() => {});
-  if (open && form.id !== (rule?.id ?? "")) {
-    // sync when opening
-    setTimeout(() => setForm(rule ? { ...rule } : emptyRule()), 0);
-  }
+  useEffect(() => {
+    if (open) setForm(rule ? { ...rule } : emptyRule());
+  }, [open, rule]);
 
   function submit() {
     if (!form.name.trim()) { toast.error("请填写规则名称"); return; }
