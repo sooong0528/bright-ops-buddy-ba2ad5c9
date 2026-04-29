@@ -76,7 +76,9 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
+import { JudgmentRulesPanel } from "@/components/JudgmentRulesPanel";
 import {
   inspectionTasks as initialTasks,
   inspectionRuns as initialRuns,
@@ -172,98 +174,111 @@ export default function InspectionAdmin() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">巡检管理</h2>
-          <p className="text-xs text-muted-foreground mt-1">配置与维护巡检任务、查看历史执行 · 面向运维主管</p>
-        </div>
-        <Button className="bg-primary" onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-2" />新建巡检任务
-        </Button>
+      <div>
+        <h2 className="text-lg font-semibold">巡检管理</h2>
+        <p className="text-xs text-muted-foreground mt-1">配置与维护巡检任务、判定规则 · 面向运维主管</p>
       </div>
 
-      {/* 任务列表 */}
-      <div className="panel">
-        <div className="flex items-center justify-between p-5 pb-3">
-          <div>
-            <h3 className="font-semibold">巡检任务</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">点击任务名查看任务详情与历史执行；可跳转到具体一次巡检结果</p>
+      <Tabs defaultValue="tasks" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="tasks">巡检任务</TabsTrigger>
+          <TabsTrigger value="rules">巡检判定规则</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="tasks" className="space-y-4 mt-0">
+          <div className="flex justify-end">
+            <Button className="bg-primary" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-2" />新建巡检任务
+            </Button>
           </div>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>任务名称</TableHead>
-              <TableHead>类型</TableHead>
-              <TableHead>调度</TableHead>
-              <TableHead>巡检指标</TableHead>
-              <TableHead>负责人</TableHead>
-              <TableHead>最近执行</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead className="text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {tasks.map((t) => (
-              <TableRow key={t.id} className="hover:bg-secondary/40">
-                <TableCell>
-                  <button
-                    className="font-medium text-left hover:text-primary transition-colors"
-                    onClick={() => setDetailTaskId(t.id)}
-                  >
-                    {t.name}
-                  </button>
-                  {!t.enabled && <span className="ml-2 text-xs text-muted-foreground">(已停用)</span>}
-                </TableCell>
-                <TableCell><StatusBadge tone="info">{t.type}</StatusBadge></TableCell>
-                <TableCell className="text-sm text-muted-foreground">{t.schedule}</TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {t.metrics.map((m) => (
-                      <span key={m} className="text-xs rounded bg-secondary px-1.5 py-0.5 text-muted-foreground">{m}</span>
-                    ))}
-                  </div>
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">{t.owner}</TableCell>
-                <TableCell className="text-sm tabular-nums text-muted-foreground">{t.lastRun}</TableCell>
-                <TableCell>
-                  <StatusBadge tone={statusTone(t.status)} dot={t.status === "运行中"}>{t.status}</StatusBadge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => runNow(t)} disabled={!t.enabled}>
-                      <PlayCircle className="h-4 w-4 mr-1" />执行
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
+
+          <div className="panel">
+            <div className="flex items-center justify-between p-5 pb-3">
+              <div>
+                <h3 className="font-semibold">巡检任务</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">点击任务名查看任务详情与历史执行；可跳转到具体一次巡检结果</p>
+              </div>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>任务名称</TableHead>
+                  <TableHead>类型</TableHead>
+                  <TableHead>调度</TableHead>
+                  <TableHead>巡检指标</TableHead>
+                  <TableHead>负责人</TableHead>
+                  <TableHead>最近执行</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tasks.map((t) => (
+                  <TableRow key={t.id} className="hover:bg-secondary/40">
+                    <TableCell>
+                      <button
+                        className="font-medium text-left hover:text-primary transition-colors"
+                        onClick={() => setDetailTaskId(t.id)}
+                      >
+                        {t.name}
+                      </button>
+                      {!t.enabled && <span className="ml-2 text-xs text-muted-foreground">(已停用)</span>}
+                    </TableCell>
+                    <TableCell><StatusBadge tone="info">{t.type}</StatusBadge></TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{t.schedule}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {t.metrics.map((m) => (
+                          <span key={m} className="text-xs rounded bg-secondary px-1.5 py-0.5 text-muted-foreground">{m}</span>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{t.owner}</TableCell>
+                    <TableCell className="text-sm tabular-nums text-muted-foreground">{t.lastRun}</TableCell>
+                    <TableCell>
+                      <StatusBadge tone={statusTone(t.status)} dot={t.status === "运行中"}>{t.status}</StatusBadge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => runNow(t)} disabled={!t.enabled}>
+                          <PlayCircle className="h-4 w-4 mr-1" />执行
                         </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40">
-                        <DropdownMenuItem onClick={() => setDetailTaskId(t.id)}>
-                          <History className="h-4 w-4 mr-2" />查看详情
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openEdit(t)}>
-                          <Pencil className="h-4 w-4 mr-2" />编辑
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toggleEnabled(t)}>
-                          {t.enabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
-                          {t.enabled ? "停用" : "启用"}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteId(t.id)}>
-                          <Trash2 className="h-4 w-4 mr-2" />删除
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem onClick={() => setDetailTaskId(t.id)}>
+                              <History className="h-4 w-4 mr-2" />查看详情
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(t)}>
+                              <Pencil className="h-4 w-4 mr-2" />编辑
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => toggleEnabled(t)}>
+                              {t.enabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
+                              {t.enabled ? "停用" : "启用"}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteId(t.id)}>
+                              <Trash2 className="h-4 w-4 mr-2" />删除
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="rules" className="mt-0">
+          <JudgmentRulesPanel />
+        </TabsContent>
+      </Tabs>
 
       <TaskEditorDialog
         open={editorOpen}
