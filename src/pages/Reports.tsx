@@ -220,14 +220,38 @@ export default function Reports() {
                     </div>
                     <div className="flex items-center justify-between mt-2.5 text-xs text-muted-foreground">
                       <span>周期 {r.period} · {r.generatedAt}</span>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2 -mr-1 text-primary hover:text-primary hover:bg-primary-soft"
-                        onClick={(e) => handleExport(r, e)}
-                      >
-                        <Download className="h-3.5 w-3.5 mr-1" />导出
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 -mr-1 text-muted-foreground hover:text-foreground"
+                            aria-label="更多操作"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleExport(r); }}>
+                            <Download className="h-4 w-4 mr-2" />导出
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleFollowup(r); }}>
+                            <MessageSquare className="h-4 w-4 mr-2" />追问
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleToggleImportant(r); }}>
+                            <Star className={cn("h-4 w-4 mr-2", m.important && "fill-warning text-warning")} />
+                            {m.important ? "取消重要" : "标记重要"}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleArchive(r); }}>
+                            {m.archived ? (
+                              <><ArchiveRestore className="h-4 w-4 mr-2" />恢复</>
+                            ) : (
+                              <><Archive className="h-4 w-4 mr-2" />归档</>
+                            )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </div>
