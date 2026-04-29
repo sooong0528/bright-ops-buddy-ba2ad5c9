@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 const titleMap: Record<string, { title: string; sub: string }> = {
   "/": { title: "总览驾驶舱", sub: "平台运行态势与关键指标一览" },
   "/inspection": { title: "巡检中心", sub: "巡检任务调度、结果分析与关注项识别" },
+  "/inspection-admin": { title: "巡检管理", sub: "巡检任务配置与判定规则管理" },
   "/assistant": { title: "智能问答", sub: "知识增强问答 · 引用手册、SOP、案例" },
   "/reports": { title: "报告中心", sub: "巡检日报 / 周报 / 异常摘要 / 问答记录" },
   "/knowledge": { title: "知识库管理", sub: "运维手册、SOP、故障案例与 FAQ 维护" },
