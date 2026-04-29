@@ -188,6 +188,30 @@ export default function Assistant() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [active.messages, loading]);
 
+  // 接收来自报告中心的「追问」跳转
+  useEffect(() => {
+    const raw = sessionStorage.getItem("assistant.pendingReportContext");
+    if (!raw) return;
+    sessionStorage.removeItem("assistant.pendingReportContext");
+    try {
+      const ctx = JSON.parse(raw) as { id: string; title: string; type: string };
+      const id = "c-" + Date.now();
+      const conv: Conversation = {
+        id,
+        title: `追问：${ctx.title}`,
+        category: "report_followup",
+        updatedAt: "刚刚",
+        messages: [welcomeMsg("report_followup")],
+        reportContext: ctx,
+      };
+      setConversations((cs) => [conv, ...cs]);
+      setActiveId(id);
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function newConversation(catKey: CategoryKey) {
     const id = "c-" + Date.now();
     const conv: Conversation = {
