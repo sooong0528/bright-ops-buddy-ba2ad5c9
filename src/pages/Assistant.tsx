@@ -3,11 +3,14 @@ import {
   Send, Sparkles, Bot, User, FileText, Lightbulb,
   BookOpen, Database, FileBarChart, MessageSquareQuote,
   Plus, Clock, Quote, BarChart3, AlertTriangle, ShieldAlert, Server,
-  ArrowRight, FileSearch,
+  ArrowRight, FileSearch, ChevronDown, Check, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/StatusBadge";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 /* ===================== 四类问答类型定义 ===================== */
 type CategoryKey = "knowledge" | "data" | "report" | "report_followup";
@@ -256,28 +259,23 @@ export default function Assistant() {
     }, 900);
   }
 
+  // 是否处于「欢迎态」（仅一条欢迎消息，未发起提问）
+  const isWelcome = active.messages.length <= 1;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[calc(100vh-9rem)]">
-      {/* 左侧：会话历史 + 新建 */}
+      {/* 左侧：会话历史 */}
       <aside className="lg:col-span-3 panel flex flex-col overflow-hidden">
-        <div className="px-4 py-3 border-b space-y-2">
-          <div className="text-xs text-muted-foreground mb-1">新建会话（按类别）</div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {CATEGORIES.map((c) => {
-              const Icon = c.icon;
-              return (
-                <button
-                  key={c.key}
-                  onClick={() => newConversation(c.key)}
-                  className={`px-2 py-1.5 rounded-md border text-xs font-medium flex items-center gap-1 hover:${c.bg} hover:${c.border} transition`}
-                  title={c.desc}
-                >
-                  <Icon className={`h-3.5 w-3.5 ${c.color}`} />
-                  <span className="truncate">{c.short}</span>
-                </button>
-              );
-            })}
-          </div>
+        <div className="px-3 py-3 border-b">
+          <Button
+            onClick={() => newConversation("knowledge")}
+            className="w-full justify-start gap-2 h-9"
+            variant="outline"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="text-sm font-medium">新建会话</span>
+            <span className="ml-auto text-xs text-muted-foreground">⌘ K</span>
+          </Button>
         </div>
         <div className="px-3 pt-3 pb-1 text-xs text-muted-foreground">历史会话</div>
         <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
@@ -310,7 +308,7 @@ export default function Assistant() {
         </div>
       </aside>
 
-      {/* 右侧：对话区（占满剩余 9 列） */}
+      {/* 右侧：对话区 */}
       <div className="panel flex flex-col lg:col-span-9 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b">
           <div className="flex items-center gap-2.5">
@@ -322,117 +320,197 @@ export default function Assistant() {
               <p className="text-xs text-muted-foreground">辅助决策 · 不直接执行生产写操作 · 全过程留痕</p>
             </div>
           </div>
-          <StatusBadge tone="success" dot>在线</StatusBadge>
+          <div className="flex items-center gap-2">
+            {!isWelcome && (
+              <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border ${cat.bg} ${cat.border} ${cat.color}`}>
+                <cat.icon className="h-3 w-3" />
+                {cat.label}
+              </span>
+            )}
+            <StatusBadge tone="success" dot>在线</StatusBadge>
+          </div>
         </div>
 
-        {/* 类别切换条（指引） */}
-        <div className="px-4 py-3 border-b bg-secondary/30">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {CATEGORIES.map((c) => {
-              const Icon = c.icon;
-              const isActive = category === c.key;
-              return (
-                <button
-                  key={c.key}
-                  onClick={() => switchCategory(c.key)}
-                  className={`px-3 py-2 rounded-lg border text-left transition ${
-                    isActive
-                      ? `${c.bg} ${c.border} ${c.color} shadow-elev-sm`
-                      : "bg-card border-border hover:border-primary/30"
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <Icon className={`h-3.5 w-3.5 ${isActive ? c.color : "text-muted-foreground"}`} />
-                    <span className="text-xs font-semibold">{c.label}</span>
+        {/* 报告追问上下文条 */}
+        {!isWelcome && category === "report_followup" && active.reportContext && (
+          <div className="px-5 py-2 border-b bg-secondary/30 flex items-center gap-2">
+            <FileSearch className="h-4 w-4 text-primary shrink-0" />
+            <span className="text-xs text-muted-foreground">当前追问的报告：</span>
+            <span className="text-xs font-medium">{active.reportContext.title}</span>
+            <StatusBadge tone="info" className="ml-auto">{active.reportContext.type}</StatusBadge>
+          </div>
+        )}
+
+        {/* 欢迎态：Kimi 风格大标题 + 居中输入框 */}
+        {isWelcome ? (
+          <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-6">
+            <div className="w-full max-w-2xl flex flex-col items-center">
+              <h1 className="text-3xl font-semibold tracking-wide mb-2 text-foreground">
+                智能问答助手
+              </h1>
+              <p className="text-sm text-muted-foreground mb-8">
+                询问运维知识、查询系统数据、生成或解读报告
+              </p>
+
+              <ComposerBox
+                input={input}
+                setInput={setInput}
+                ask={ask}
+                category={category}
+                cat={cat}
+                onSwitchCategory={switchCategory}
+                loading={loading}
+                large
+              />
+
+              {/* 该类别常见提问 */}
+              <div className="w-full mt-6 space-y-2">
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Lightbulb className="h-3.5 w-3.5 text-primary" /> 「{cat.label}」常见提问
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {cat.examples.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => ask(s)}
+                      className="text-left rounded-lg border bg-card hover:border-primary/40 hover:shadow-elev-sm p-3 text-sm transition flex items-start justify-between gap-2 group"
+                    >
+                      <span className="line-clamp-2">{s}</span>
+                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary shrink-0 mt-0.5" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* 消息列表 */}
+            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+              {active.messages.map((m) => (
+                <Message key={m.id} msg={m} />
+              ))}
+
+              {loading && (
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <div className="h-8 w-8 rounded-full bg-primary-soft flex items-center justify-center">
+                    <Bot className="h-4 w-4 text-primary" />
                   </div>
-                  <p className={`text-xs mt-1 leading-snug ${isActive ? "text-foreground/80" : "text-muted-foreground"}`}>
-                    {c.desc}
-                  </p>
-                </button>
+                  <span className="flex items-center gap-1">
+                    正在处理「{cat.label}」请求
+                    <span className="inline-flex gap-0.5 ml-1">
+                      <span className="h-1 w-1 rounded-full bg-primary animate-pulse" />
+                      <span className="h-1 w-1 rounded-full bg-primary animate-pulse" style={{ animationDelay: "0.2s" }} />
+                      <span className="h-1 w-1 rounded-full bg-primary animate-pulse" style={{ animationDelay: "0.4s" }} />
+                    </span>
+                  </span>
+                </div>
+              )}
+              <div ref={endRef} />
+            </div>
+
+            <div className="border-t p-4 bg-secondary/30">
+              <ComposerBox
+                input={input}
+                setInput={setInput}
+                ask={ask}
+                category={category}
+                cat={cat}
+                onSwitchCategory={switchCategory}
+                loading={loading}
+              />
+              <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                <Quote className="h-3 w-3" />
+                助手仅提供分析与建议，不直接执行重启服务、修改配置等生产写操作
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ===================== 输入框组件（Kimi 风格） ===================== */
+function ComposerBox({
+  input, setInput, ask, category, cat, onSwitchCategory, loading, large,
+}: {
+  input: string;
+  setInput: (v: string) => void;
+  ask: (q: string) => void;
+  category: CategoryKey;
+  cat: Category;
+  onSwitchCategory: (k: CategoryKey) => void;
+  loading: boolean;
+  large?: boolean;
+}) {
+  const Icon = cat.icon;
+  return (
+    <div className={`w-full rounded-2xl border bg-card shadow-elev-sm focus-within:border-primary/50 focus-within:shadow-elev-md transition ${large ? "p-3" : "p-2.5"}`}>
+      <Textarea
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            ask(input);
+          }
+        }}
+        placeholder={`「${cat.label}」：${cat.examples[0]}`}
+        className={`resize-none border-0 focus-visible:ring-0 shadow-none px-2 ${large ? "min-h-[64px] text-sm" : "min-h-[44px] text-sm"}`}
+        rows={large ? 2 : 1}
+      />
+      <div className="flex items-center gap-2 px-1 pt-1">
+        {/* 模式切换 */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full border ${cat.bg} ${cat.border} ${cat.color} hover:shadow-elev-sm transition`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              <span className="font-medium">{cat.label}</span>
+              <ChevronDown className="h-3 w-3 opacity-70" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            {CATEGORIES.map((c) => {
+              const CIcon = c.icon;
+              const active = c.key === category;
+              return (
+                <DropdownMenuItem
+                  key={c.key}
+                  onClick={() => onSwitchCategory(c.key)}
+                  className="flex items-start gap-2 py-2"
+                >
+                  <div className={`h-7 w-7 rounded-md ${c.bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                    <CIcon className={`h-3.5 w-3.5 ${c.color}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-medium">{c.label}</span>
+                      {active && <Check className="h-3.5 w-3.5 text-primary" />}
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{c.desc}</p>
+                  </div>
+                </DropdownMenuItem>
               );
             })}
-          </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-          {/* 报告追问上下文条 */}
-          {category === "report_followup" && active.reportContext && (
-            <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-md bg-card border border-accent/40">
-              <FileSearch className="h-4 w-4 text-primary shrink-0" />
-              <span className="text-xs text-muted-foreground">当前追问的报告：</span>
-              <span className="text-xs font-medium">{active.reportContext.title}</span>
-              <StatusBadge tone="info" className="ml-auto">{active.reportContext.type}</StatusBadge>
-            </div>
-          )}
-        </div>
+        <span className="text-xs text-muted-foreground hidden sm:inline truncate flex-1">
+          {cat.guideline.length > 40 ? cat.guideline.slice(0, 40) + "…" : cat.guideline}
+        </span>
 
-        {/* 消息列表 */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-          {active.messages.map((m) => (
-            <Message key={m.id} msg={m} />
-          ))}
-
-          {/* 首次进入展示该类别的示例问题 */}
-          {active.messages.length === 1 && (
-            <div className="space-y-2 mt-3">
-              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Lightbulb className="h-3.5 w-3.5 text-primary" /> 「{cat.label}」常见提问
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {cat.examples.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => ask(s)}
-                    className="text-left rounded-lg border bg-card hover:border-primary/40 hover:shadow-elev-sm p-3 text-sm transition flex items-start justify-between gap-2 group"
-                  >
-                    <span className="line-clamp-2">{s}</span>
-                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary shrink-0 mt-0.5" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {loading && (
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <div className="h-8 w-8 rounded-full bg-primary-soft flex items-center justify-center">
-                <Bot className="h-4 w-4 text-primary" />
-              </div>
-              <span className="flex items-center gap-1">
-                正在处理「{cat.label}」请求
-                <span className="inline-flex gap-0.5 ml-1">
-                  <span className="h-1 w-1 rounded-full bg-primary animate-pulse" />
-                  <span className="h-1 w-1 rounded-full bg-primary animate-pulse" style={{ animationDelay: "0.2s" }} />
-                  <span className="h-1 w-1 rounded-full bg-primary animate-pulse" style={{ animationDelay: "0.4s" }} />
-                </span>
-              </span>
-            </div>
-          )}
-          <div ref={endRef} />
-        </div>
-
-        <div className="border-t p-4 bg-secondary/30">
-          <div className="flex gap-2 items-end">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  ask(input);
-                }
-              }}
-              placeholder={`「${cat.label}」：${cat.examples[0]}`}
-              className="resize-none bg-card min-h-[60px]"
-              rows={2}
-            />
-            <Button onClick={() => ask(input)} disabled={!input.trim() || loading} className="h-[60px] px-4">
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-            <Quote className="h-3 w-3" />
-            助手仅提供分析与建议，不直接执行重启服务、修改配置等生产写操作
-          </p>
-        </div>
+        <Button
+          onClick={() => ask(input)}
+          disabled={!input.trim() || loading}
+          size="sm"
+          className="h-8 px-3 ml-auto sm:ml-0"
+        >
+          <Send className="h-3.5 w-3.5" />
+        </Button>
       </div>
     </div>
   );
