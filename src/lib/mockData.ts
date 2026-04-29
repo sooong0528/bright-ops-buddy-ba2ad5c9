@@ -60,15 +60,52 @@ export interface AlertItem {
   suggestion: string;
 }
 
+export type ReportCategory = "巡检质量报告" | "风险研判报告" | "知识服务报告";
+export type ReportFrequency = "日报" | "周报" | "月报";
+
 export interface ReportItem {
   id: string;
   title: string;
-  type: "日报" | "周报" | "异常摘要" | "问答记录";
+  category: ReportCategory;
+  frequency: ReportFrequency;
   period: string;
   generatedAt: string;
   author: "系统自动" | string;
   summary: string;
   status: "已归档" | "草稿";
+  // 巡检质量报告指标
+  quality?: {
+    completionRate: number; // 完成率 %
+    coverageRate: number;   // 覆盖率 %
+    totalTasks: number;
+    finishedTasks: number;
+    totalHosts: number;
+    coveredHosts: number;
+    abnormal: number;
+    attention: number;
+    normal: number;
+    failedRuns: number;
+  };
+  // 风险研判报告指标
+  risk?: {
+    riskLevel: "高" | "中" | "低";
+    riskScore: number; // 0-100
+    keyAlerts: { host: string; metric: string; trend: string; severity: Severity }[];
+    rootCauses: string[];
+    focusHosts: string[];
+    recommendations: string[];
+  };
+  // 知识服务报告指标
+  knowledge?: {
+    totalQA: number;             // 问答次数
+    citedKnowledge: number;      // 命中知识条目
+    citationRate: number;        // 命中率 %
+    newDocs: number;             // 新增文档
+    updatedDocs: number;         // 更新文档
+    topQuestions: { q: string; count: number }[];
+    topDocs: { title: string; cited: number }[];
+    coverageGaps: string[];      // 知识盲区
+  };
 }
 
 export interface KnowledgeItem {
@@ -150,10 +187,104 @@ export const alerts: AlertItem[] = [
 ];
 
 export const reports: ReportItem[] = [
-  { id: "r1", title: "业务系统日常巡检日报", type: "日报", period: "2025-04-21", generatedAt: "2025-04-22 08:15", author: "系统自动", summary: "全量 8 台主机完成巡检，2 项异常 2 项关注，主要集中在 app-svc-01 与 mq-01。", status: "已归档" },
-  { id: "r2", title: "业务系统运维周报", type: "周报", period: "2025-04-14 ~ 04-20", generatedAt: "2025-04-21 09:00", author: "系统自动", summary: "本周共触发轻量提醒 12 次，重启服务 1 次，知识库新增 3 条 SOP。", status: "已归档" },
-  { id: "r3", title: "MQ 主机连通性异常摘要", type: "异常摘要", period: "2025-04-22 10:18", generatedAt: "2025-04-22 10:21", author: "系统自动", summary: "mq-01 主机连续 3 次 ICMP 失败，已自动关联历史 SOP 与处理建议。", status: "已归档" },
-  { id: "r4", title: "知识问答输出记录 — 数据库内存", type: "问答记录", period: "2025-04-22", generatedAt: "2025-04-22 10:30", author: "张运维", summary: "围绕 db-master-01 内存升高的问答整理，引用 2 篇 SOP 与 1 个历史案例。", status: "草稿" },
+  {
+    id: "r1",
+    title: "业务系统巡检质量日报",
+    category: "巡检质量报告",
+    frequency: "日报",
+    period: "2025-04-21",
+    generatedAt: "2025-04-22 08:15",
+    author: "系统自动",
+    summary: "全量 8 台主机完成巡检，覆盖率 100%，2 项异常 2 项关注，主要集中在 app-svc-01 与 mq-01。",
+    status: "已归档",
+    quality: {
+      completionRate: 98.5, coverageRate: 100, totalTasks: 5, finishedTasks: 5,
+      totalHosts: 8, coveredHosts: 8, abnormal: 2, attention: 2, normal: 4, failedRuns: 0,
+    },
+  },
+  {
+    id: "r2",
+    title: "业务系统巡检质量周报",
+    category: "巡检质量报告",
+    frequency: "周报",
+    period: "2025-04-14 ~ 04-20",
+    generatedAt: "2025-04-21 09:00",
+    author: "系统自动",
+    summary: "本周共执行巡检任务 35 次，完成率 97.1%，覆盖全部 8 台主机，识别异常 5 项、关注 9 项。",
+    status: "已归档",
+    quality: {
+      completionRate: 97.1, coverageRate: 100, totalTasks: 35, finishedTasks: 34,
+      totalHosts: 8, coveredHosts: 8, abnormal: 5, attention: 9, normal: 21, failedRuns: 1,
+    },
+  },
+  {
+    id: "r3",
+    title: "业务系统风险研判周报",
+    category: "风险研判报告",
+    frequency: "周报",
+    period: "2025-04-14 ~ 04-20",
+    generatedAt: "2025-04-21 10:00",
+    author: "系统自动",
+    summary: "本周整体风险等级为「中」。app-svc-01 CPU 持续高位、mq-01 间歇失联、db-master-01 内存稳步上升，需重点关注。",
+    status: "已归档",
+    risk: {
+      riskLevel: "中",
+      riskScore: 62,
+      keyAlerts: [
+        { host: "app-svc-01", metric: "CPU 使用率", trend: "周内 3 次突破 90%", severity: "严重" },
+        { host: "mq-01", metric: "ICMP 连通性", trend: "出现 2 次失联事件", severity: "严重" },
+        { host: "db-master-01", metric: "内存使用率", trend: "由 72% 上升至 82%", severity: "警告" },
+      ],
+      rootCauses: [
+        "app-svc-01 高峰时段请求量周环比 +18%，应用线程数接近上限",
+        "mq-01 所在网段在 04-17、04-19 出现链路抖动",
+        "db-master-01 存在长事务未及时回收，缓存膨胀",
+      ],
+      focusHosts: ["app-svc-01", "mq-01", "db-master-01"],
+      recommendations: [
+        "对 app-svc-01 进行线程栈采样并评估扩容",
+        "联合网络团队对 10.20.5.0/24 网段做链路质量分析",
+        "DBA 介入排查长事务，必要时调整 Buffer Pool 配置",
+        "下周新增 MQ 专项巡检任务，频率提升至每 10 分钟",
+      ],
+    },
+  },
+  {
+    id: "r4",
+    title: "知识服务月度报告",
+    category: "知识服务报告",
+    frequency: "月报",
+    period: "2025-04",
+    generatedAt: "2025-04-22 09:00",
+    author: "系统自动",
+    summary: "本月共承接问答 326 次，命中知识库 287 次，命中率 88%；新增 4 篇 SOP、更新 6 篇文档；识别 3 个知识盲区。",
+    status: "已归档",
+    knowledge: {
+      totalQA: 326,
+      citedKnowledge: 287,
+      citationRate: 88,
+      newDocs: 4,
+      updatedDocs: 6,
+      topQuestions: [
+        { q: "CPU 使用率持续高位如何排查", count: 42 },
+        { q: "MQ 节点失联应急处理流程", count: 31 },
+        { q: "MySQL 内存增长原因分析", count: 27 },
+        { q: "服务重启前后确认事项", count: 23 },
+        { q: "磁盘水位告警处理", count: 18 },
+      ],
+      topDocs: [
+        { title: "Linux 主机 CPU 高负载排查 SOP v1.3", cited: 56 },
+        { title: "MySQL 内存使用率升高处理手册 v2.0", cited: 41 },
+        { title: "MQ 节点宕机历史故障案例 (2024-11)", cited: 33 },
+        { title: "服务重启前后确认事项 FAQ v1.1", cited: 28 },
+      ],
+      coverageGaps: [
+        "缺少缓存层（Redis）专项排查 SOP，本月相关问答 12 次未命中",
+        "缺少跨机房链路抖动应急流程",
+        "Zabbix 自定义指标对接说明文档版本陈旧",
+      ],
+    },
+  },
 ];
 
 export const knowledge: KnowledgeItem[] = [
