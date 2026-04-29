@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Send, Sparkles, BookOpen, FileText, Bot, User, Quote, Lightbulb,
-  Stethoscope, ListChecks, Gauge, Search, Plus, Clock, MessageSquare,
+  Stethoscope, ListChecks, Gauge, Plus, Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
