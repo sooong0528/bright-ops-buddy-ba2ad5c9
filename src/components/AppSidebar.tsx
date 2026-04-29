@@ -102,17 +102,6 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {!collapsed && (
-          <div className="mt-auto p-4 m-3 rounded-xl bg-sidebar-accent/40 border border-sidebar-border">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="h-2 w-2 rounded-full bg-success animate-pulse-soft" />
-              <span className="text-xs font-semibold text-sidebar-accent-foreground">Zabbix 7.0.21</span>
-            </div>
-            <p className="text-xs leading-relaxed text-sidebar-foreground/70">
-              已接入 8 台主机 · CPU / 内存 / 磁盘 / Ping
-            </p>
-          </div>
-        )}
       </SidebarContent>
     </Sidebar>
   );
