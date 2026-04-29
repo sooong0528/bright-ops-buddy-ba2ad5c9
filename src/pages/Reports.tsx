@@ -13,6 +13,9 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   RadialBarChart, RadialBar, PolarAngleAxis, CartesianGrid,
 } from "recharts";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from "@/components/ui/sheet";
 
 const categoryMeta: Record<ReportCategory, { icon: any; color: string; bg: string; desc: string }> = {
   巡检质量报告: {
@@ -38,6 +41,7 @@ const categoryMeta: Record<ReportCategory, { icon: any; color: string; bg: strin
 export default function Reports() {
   const [active, setActive] = useState<"全部" | ReportCategory>("全部");
   const [keyword, setKeyword] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     return reports.filter((r) => {
@@ -47,10 +51,8 @@ export default function Reports() {
     });
   }, [active, keyword]);
 
-  const [selectedId, setSelectedId] = useState(reports[0].id);
-  const selected = filtered.find((r) => r.id === selectedId) ?? filtered[0] ?? reports[0];
+  const selected = openId ? reports.find((r) => r.id === openId) ?? null : null;
 
-  // 统计数字
   const stats = useMemo(() => ({
     total: reports.length,
     quality: reports.filter((r) => r.category === "巡检质量报告").length,
@@ -97,26 +99,21 @@ export default function Reports() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        {/* 左侧列表 */}
-        <div className="lg:col-span-2 space-y-2">
-          {filtered.length === 0 && (
-            <div className="panel p-8 text-center text-sm text-muted-foreground">
-              没有匹配的报告
-            </div>
-          )}
+      {/* 报告列表卡片（网格） */}
+      {filtered.length === 0 ? (
+        <div className="panel p-12 text-center text-sm text-muted-foreground">
+          没有匹配的报告
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map((r) => {
             const meta = categoryMeta[r.category];
             const Icon = meta.icon;
             return (
               <button
                 key={r.id}
-                onClick={() => setSelectedId(r.id)}
-                className={`w-full text-left panel p-4 transition-all ${
-                  selected.id === r.id
-                    ? "border-primary shadow-elev-md ring-2 ring-primary/10"
-                    : "hover:border-border hover:shadow-elev-sm"
-                }`}
+                onClick={() => setOpenId(r.id)}
+                className="text-left panel p-4 transition-all hover:border-primary/50 hover:shadow-elev-md"
               >
                 <div className="flex items-start gap-3">
                   <div className={`h-10 w-10 rounded-lg ${meta.bg} flex items-center justify-center shrink-0`}>
@@ -127,11 +124,14 @@ export default function Reports() {
                       <h4 className="font-medium text-sm truncate">{r.title}</h4>
                       <StatusBadge tone={statusTone(r.status)}>{r.status}</StatusBadge>
                     </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2">{r.summary}</p>
-                    <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">
+                    <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2.5em]">{r.summary}</p>
+                    <div className="flex items-center gap-1.5 mt-2.5 text-xs text-muted-foreground flex-wrap">
                       <StatusBadge tone="info">{r.category}</StatusBadge>
                       <StatusBadge tone="muted">{r.frequency}</StatusBadge>
-                      <span>{r.period}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                      <span>周期 {r.period}</span>
+                      <span>{r.generatedAt}</span>
                     </div>
                   </div>
                 </div>
@@ -139,22 +139,33 @@ export default function Reports() {
             );
           })}
         </div>
+      )}
 
-        {/* 右侧详情 */}
-        <div className="lg:col-span-3 panel p-6">
-          <ReportHeader report={selected} />
-          <div className="mt-5 space-y-5 text-sm leading-relaxed">
-            {selected.category === "巡检质量报告" && <QualityReport report={selected} />}
-            {selected.category === "风险研判报告" && <RiskReport report={selected} />}
-            {selected.category === "知识服务报告" && <KnowledgeReport report={selected} />}
+      {/* 右侧抽屉：报告详情 */}
+      <Sheet open={!!selected} onOpenChange={(o) => !o && setOpenId(null)}>
+        <SheetContent className="w-full sm:max-w-3xl overflow-y-auto p-0">
+          {selected && (
+            <>
+              <SheetHeader className="sr-only">
+                <SheetTitle>{selected.title}</SheetTitle>
+              </SheetHeader>
+              <div className="p-6">
+                <ReportHeader report={selected} />
+                <div className="mt-5 space-y-5 text-sm leading-relaxed">
+                  {selected.category === "巡检质量报告" && <QualityReport report={selected} />}
+                  {selected.category === "风险研判报告" && <RiskReport report={selected} />}
+                  {selected.category === "知识服务报告" && <KnowledgeReport report={selected} />}
 
-            <div className="rounded-lg bg-muted/40 border border-dashed p-3 text-xs text-muted-foreground flex items-start gap-2">
-              <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
-              <span>本报告由报告生成 Agent 自动整理，已存入审计留痕。如需修改，请由具备相应权限的用户在草稿状态下进行调整。</span>
-            </div>
-          </div>
-        </div>
-      </div>
+                  <div className="rounded-lg bg-muted/40 border border-dashed p-3 text-xs text-muted-foreground flex items-start gap-2">
+                    <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                    <span>本报告由报告生成 Agent 自动整理，已存入审计留痕。如需修改，请由具备相应权限的用户在草稿状态下进行调整。</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
