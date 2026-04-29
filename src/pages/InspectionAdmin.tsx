@@ -176,25 +176,25 @@ export default function InspectionAdmin() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">巡检管理</h2>
-        <p className="text-xs text-muted-foreground mt-1">配置与维护巡检任务、判定规则 · 面向运维主管</p>
-      </div>
-
-      <Tabs defaultValue="tasks" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="tasks">巡检任务</TabsTrigger>
-          <TabsTrigger value="rules">巡检判定规则</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="tasks" className="space-y-4 mt-0">
-          <div className="flex justify-end">
+    <div className="space-y-4">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "tasks" | "rules")} className="space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <TabsList>
+            <TabsTrigger value="tasks">巡检任务</TabsTrigger>
+            <TabsTrigger value="rules">巡检判定规则</TabsTrigger>
+          </TabsList>
+          {activeTab === "tasks" ? (
             <Button className="bg-primary" onClick={openCreate}>
               <Plus className="h-4 w-4 mr-2" />新建巡检任务
             </Button>
-          </div>
+          ) : (
+            <Button className="bg-primary" onClick={() => setRuleCreateSignal((v) => v + 1)}>
+              <Plus className="h-4 w-4 mr-2" />新增指标规则
+            </Button>
+          )}
+        </div>
 
+        <TabsContent value="tasks" className="space-y-4 mt-0">
           <div className="panel">
             <div className="flex items-center justify-between p-5 pb-3">
               <div>
@@ -202,6 +202,7 @@ export default function InspectionAdmin() {
                 <p className="text-xs text-muted-foreground mt-0.5">点击任务名查看任务详情与历史执行；可跳转到具体一次巡检结果</p>
               </div>
             </div>
+
             <Table>
               <TableHeader>
                 <TableRow>
