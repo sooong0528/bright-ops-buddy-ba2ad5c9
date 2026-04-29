@@ -3,11 +3,14 @@ import {
   Send, Sparkles, Bot, User, FileText, Lightbulb,
   BookOpen, Database, FileBarChart, MessageSquareQuote,
   Plus, Clock, Quote, BarChart3, AlertTriangle, ShieldAlert, Server,
-  ArrowRight, FileSearch,
+  ArrowRight, FileSearch, ChevronDown, Check, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/StatusBadge";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 /* ===================== 四类问答类型定义 ===================== */
 type CategoryKey = "knowledge" | "data" | "report" | "report_followup";
