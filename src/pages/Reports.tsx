@@ -130,7 +130,7 @@ export default function Reports() {
                     <p className="text-xs text-muted-foreground line-clamp-2">{r.summary}</p>
                     <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">
                       <StatusBadge tone="info">{r.category}</StatusBadge>
-                      <StatusBadge tone="default">{r.frequency}</StatusBadge>
+                      <StatusBadge tone="muted">{r.frequency}</StatusBadge>
                       <span>{r.period}</span>
                     </div>
                   </div>
@@ -172,7 +172,7 @@ function ReportHeader({ report }: { report: ReportItem }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <StatusBadge tone="info">{report.category}</StatusBadge>
-            <StatusBadge tone="default">{report.frequency}</StatusBadge>
+            <StatusBadge tone="muted">{report.frequency}</StatusBadge>
             <StatusBadge tone={statusTone(report.status)}>{report.status}</StatusBadge>
           </div>
           <h2 className="text-xl font-semibold leading-snug">{report.title}</h2>
