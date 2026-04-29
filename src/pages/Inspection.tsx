@@ -38,7 +38,6 @@ import {
 type RangeKey = "today" | "week" | "month";
 
 export default function Inspection() {
-  const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
