@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import {
   CheckCircle2,
   AlertCircle,
   AlertTriangle,
   RefreshCw,
   Search,
-  Calendar,
   ListChecks,
-  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
