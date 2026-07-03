@@ -35,32 +35,55 @@ import {
   inspectionRuns,
   alerts,
   hosts,
+  abnormalRecords,
 } from "@/lib/mockData";
 
 type RangeKey = "today" | "week" | "month";
+type ViewKey = "results" | "abnormal";
 
 export default function Inspection() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const initialTab = (searchParams.get("tab") as ViewKey) || "results";
+  const [view, setView] = useState<ViewKey>(initialTab);
   const [range, setRange] = useState<RangeKey>("today");
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [taskFilter, setTaskFilter] = useState<string>("all");
+  const [levelFilter, setLevelFilter] = useState<string>("all");
+  const [recStatusFilter, setRecStatusFilter] = useState<string>("all");
 
-  function startAnalysis(alertId: string, host: string, metric: string) {
+  useEffect(() => {
+    const t = searchParams.get("tab") as ViewKey | null;
+    if (t && t !== view) setView(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  function switchView(v: ViewKey) {
+    setView(v);
+    const next = new URLSearchParams(searchParams);
+    if (v === "results") next.delete("tab"); else next.set("tab", v);
+    setSearchParams(next, { replace: true });
+  }
+
+  function startAnalysisById(recordId: string) {
+    navigate(`/analysis?record=${recordId}`);
+  }
+  function startAnalysis(alertId: string) {
     navigate(`/analysis?alert=${alertId}`);
   }
-  function askAbout(host: string, metric: string, description: string) {
+  function askAbout(title: string, sourceId: string, snapshot: string, sourceType: "巡检异常" | "关注项" = "巡检异常") {
     sessionStorage.setItem("assistant.context", JSON.stringify({
-      sourceType: "巡检异常",
-      sourceId: `${host}-${metric}`,
-      title: `${host} · ${metric}`,
-      snapshot: description,
+      sourceType,
+      sourceId,
+      title,
+      snapshot,
     }));
     navigate("/assistant");
   }
+
 
 
   // Mock 时间筛选：演示数据较少，统一返回全部，但保留筛选交互
