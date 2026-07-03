@@ -281,9 +281,9 @@ export default function Reports() {
                   onArchive={() => handleArchive(selected)}
                 />
                 <div className="mt-5 space-y-5 text-sm leading-relaxed">
-                  {selected.category === "巡检质量报告" && <QualityReport report={selected} />}
-                  {selected.category === "风险研判报告" && <RiskReport report={selected} />}
-                  {selected.category === "知识服务报告" && <KnowledgeReport report={selected} />}
+                  {selected.category === "巡检报告" && <QualityReport report={selected} />}
+                  {selected.category === "故障分析报告" && <AnalysisReport report={selected} />}
+                  {selected.category === "知识服务情况分析报告" && <KnowledgeReport report={selected} />}
 
                   {/* 人工备注 */}
                   <Section title={<span className="flex items-center gap-1.5"><StickyNote className="h-4 w-4 text-primary" />人工备注</span>}>
