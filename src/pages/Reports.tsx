@@ -31,23 +31,23 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 const categoryMeta: Record<ReportCategory, { icon: any; color: string; bg: string; desc: string }> = {
-  巡检质量报告: {
+  巡检报告: {
     icon: ShieldCheck,
     color: "text-primary",
     bg: "bg-primary-soft",
-    desc: "聚焦巡检完成率、覆盖率与异常项分布",
+    desc: "聚焦巡检完成率、覆盖率与异常项分布（日报 / 周报）",
   },
-  风险研判报告: {
+  故障分析报告: {
     icon: AlertTriangle,
     color: "text-warning",
     bg: "bg-warning/10",
-    desc: "聚焦异常分析、风险判断与重点关注对象",
+    desc: "针对异常/关注记录形成的原因假设与处置建议",
   },
-  知识服务报告: {
+  知识服务情况分析报告: {
     icon: BookOpen,
     color: "text-info",
     bg: "bg-info/10",
-    desc: "聚焦知识库对运维工作的支撑能力",
+    desc: "聚焦知识库对运维工作的支撑能力（月报）",
   },
 };
 
