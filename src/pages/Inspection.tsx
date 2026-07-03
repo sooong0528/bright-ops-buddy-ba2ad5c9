@@ -206,8 +206,8 @@ export default function Inspection() {
 
       {view === "results" ? (
         /* ============ 巡检结果视图 ============ */
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <div className="panel xl:col-span-2">
+        <div>
+          <div className="panel">
             <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-3">
               <div>
                 <h3 className="font-semibold">巡检结果</h3>
