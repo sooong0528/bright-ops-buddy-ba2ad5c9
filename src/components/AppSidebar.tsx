@@ -8,6 +8,8 @@ import {
   ScrollText,
   Activity,
   Settings2,
+  Wrench,
+  Boxes,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -25,12 +27,14 @@ import {
 const mainItems = [
   { title: "总览驾驶舱", url: "/", icon: LayoutDashboard },
   { title: "巡检中心", url: "/inspection", icon: ClipboardCheck },
+  { title: "故障分析", url: "/analysis", icon: Wrench },
   { title: "智能问答", url: "/assistant", icon: Bot },
   { title: "报告中心", url: "/reports", icon: FileText },
 ];
 
 const manageItems = [
-  { title: "巡检管理", url: "/inspection-admin", icon: Settings2 },
+  { title: "资产管理", url: "/assets", icon: Boxes },
+  { title: "巡检配置管理", url: "/inspection-admin", icon: Settings2 },
   { title: "知识库管理", url: "/knowledge", icon: BookOpen },
   { title: "用户与权限", url: "/users", icon: Users },
   { title: "审计留痕", url: "/audit", icon: ScrollText },
@@ -43,7 +47,6 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarContent className="bg-sidebar">
-        {/* Logo 区 */}
         <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
             <Activity className="h-5 w-5 text-primary-foreground" />
@@ -101,7 +104,6 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
       </SidebarContent>
     </Sidebar>
   );
