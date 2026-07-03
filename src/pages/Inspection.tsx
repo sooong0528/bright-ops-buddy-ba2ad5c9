@@ -143,22 +143,55 @@ export default function Inspection() {
     // no-op: handled by URL
   }, [location.search]);
 
+  // 待关注事项列表：合并 abnormalRecords（level=异常/关注）
+  const filteredRecords = useMemo(() => {
+    return abnormalRecords.filter((r) => {
+      if (levelFilter !== "all" && r.level !== levelFilter) return false;
+      if (recStatusFilter !== "all" && r.status !== recStatusFilter) return false;
+      if (keyword) {
+        const k = keyword.toLowerCase();
+        if (
+          !r.assetName.toLowerCase().includes(k) &&
+          !r.metric.toLowerCase().includes(k) &&
+          !r.description.toLowerCase().includes(k)
+        ) return false;
+      }
+      return true;
+    });
+  }, [levelFilter, recStatusFilter, keyword]);
+
+  const abnormalCount = abnormalRecords.filter((r) => r.level === "异常").length;
+  const attentionCount = abnormalRecords.filter((r) => r.level === "关注").length;
+
   return (
     <div className="space-y-6">
-      {/* 顶部：时间范围 + 操作 */}
+      {/* 顶部：视图切换 + 时间范围 + 操作 */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">巡检中心</h2>
-          <p className="text-xs text-muted-foreground mt-1">查看巡检状态、结果与异常追踪 · 面向运维与值班人员</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Tabs value={range} onValueChange={(v) => setRange(v as RangeKey)}>
+        <div className="flex items-center gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">巡检中心</h2>
+            <p className="text-xs text-muted-foreground mt-1">查看巡检状态、结果与待关注事项 · 面向运维与值班人员</p>
+          </div>
+          <Tabs value={view} onValueChange={(v) => switchView(v as ViewKey)}>
             <TabsList>
-              <TabsTrigger value="today">本日</TabsTrigger>
-              <TabsTrigger value="week">本周</TabsTrigger>
-              <TabsTrigger value="month">本月</TabsTrigger>
+              <TabsTrigger value="results">巡检结果</TabsTrigger>
+              <TabsTrigger value="abnormal">
+                待关注事项
+                <span className="ml-1.5 text-xs text-muted-foreground tabular-nums">{abnormalRecords.length}</span>
+              </TabsTrigger>
             </TabsList>
           </Tabs>
+        </div>
+        <div className="flex items-center gap-2">
+          {view === "results" && (
+            <Tabs value={range} onValueChange={(v) => setRange(v as RangeKey)}>
+              <TabsList>
+                <TabsTrigger value="today">本日</TabsTrigger>
+                <TabsTrigger value="week">本周</TabsTrigger>
+                <TabsTrigger value="month">本月</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
           <Button variant="outline"><RefreshCw className="h-4 w-4 mr-2" />刷新</Button>
         </div>
       </div>
@@ -167,187 +200,276 @@ export default function Inspection() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <SummaryTile icon={ListChecks} label="巡检完成率" value={`${stats.completionRate}%`} tone="info" sub={`已完成 ${stats.finished} / 共 ${stats.totalRuns} 次`} />
         <SummaryTile icon={CheckCircle2} label="主机正常项" value={String(stats.normal)} tone="success" />
-        <SummaryTile icon={AlertCircle} label="关注项" value={String(stats.attention)} tone="warning" />
-        <SummaryTile icon={AlertTriangle} label="异常项" value={String(stats.abnormal)} tone="destructive" />
+        <SummaryTile icon={AlertCircle} label="关注项" value={String(attentionCount)} tone="warning" />
+        <SummaryTile icon={AlertTriangle} label="异常项" value={String(abnormalCount)} tone="destructive" />
       </div>
 
-      {/* 主内容：巡检结果 + 异常追踪 */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* 巡检结果列表 */}
-        <div className="panel xl:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-3">
-            <div>
-              <h3 className="font-semibold">巡检结果</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">点击任意一次巡检查看详细结果</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="搜索任务名 / 摘要"
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                  className="h-9 pl-8 w-56"
-                />
-              </div>
-              <Select value={taskFilter} onValueChange={setTaskFilter}>
-                <SelectTrigger className="h-9 w-44"><SelectValue placeholder="全部任务" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部任务</SelectItem>
-                  {inspectionTasks.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-9 w-32"><SelectValue placeholder="全部状态" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部状态</SelectItem>
-                  <SelectItem value="已完成">已完成</SelectItem>
-                  <SelectItem value="运行中">运行中</SelectItem>
-                  <SelectItem value="失败">失败</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>巡检</TableHead>
-                <TableHead>所属任务</TableHead>
-                <TableHead>开始时间</TableHead>
-                <TableHead>耗时</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead className="text-right">结果</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRuns.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
-                    没有匹配的巡检记录
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredRuns.map((r) => {
-                  const task = inspectionTasks.find((t) => t.id === r.taskId);
-                  return (
-                    <TableRow
-                      key={r.id}
-                      className="hover:bg-secondary/40 cursor-pointer"
-                      onClick={() => openRun(r.id)}
-                    >
-                      <TableCell>
-                        <span className="font-medium tabular-nums">#{r.id.replace("run-", "")}</span>
-                        <div className="text-xs text-muted-foreground mt-0.5">{r.trigger} · {r.operator}</div>
-                      </TableCell>
-                      <TableCell className="text-sm">{task?.name ?? "—"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground tabular-nums">{r.startTime}</TableCell>
-                      <TableCell className="text-xs tabular-nums">{r.duration}</TableCell>
-                      <TableCell>
-                        <StatusBadge tone={statusTone(r.status)} dot={r.status === "运行中"}>{r.status}</StatusBadge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex items-center gap-3 text-xs tabular-nums">
-                          <span className="text-success">正 {r.normal}</span>
-                          <span className="text-warning">关 {r.attention}</span>
-                          <span className="text-destructive">异 {r.abnormal}</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* 右侧：异常追踪 + 巡检发现的告警 */}
-        <div className="space-y-4">
-          {/* 异常追踪 */}
-          <div className="panel p-5 space-y-3">
-            <div className="flex items-center justify-between">
+      {view === "results" ? (
+        /* ============ 巡检结果视图 ============ */
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="panel xl:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-3">
               <div>
-                <h3 className="font-semibold text-sm">异常追踪</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">需要关注与处置的主机</p>
+                <h3 className="font-semibold">巡检结果</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">点击任意一次巡检查看详细结果</p>
               </div>
-              <span className="text-xs text-muted-foreground tabular-nums">共 {abnormalHosts.length} 台</span>
-            </div>
-
-            <div className="space-y-2">
-              {abnormalHosts.length === 0 ? (
-                <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
-                  当前无异常 ✓
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="搜索任务名 / 摘要"
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                    className="h-9 pl-8 w-56"
+                  />
                 </div>
-              ) : (
-                abnormalHosts.map((h) => (
-                  <div key={h.id} className="rounded-lg border bg-card p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium truncate">{h.name}</span>
-                      <StatusBadge tone={statusTone(h.status)} dot={h.status === "异常"}>{h.status}</StatusBadge>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">{h.ip} · {h.group}</div>
-                    <div className="mt-2 grid grid-cols-4 gap-2 text-xs tabular-nums text-muted-foreground">
-                      <span>CPU <span className="text-foreground">{h.cpu}%</span></span>
-                      <span>内存 <span className="text-foreground">{h.memory}%</span></span>
-                      <span>磁盘 <span className="text-foreground">{h.disk}%</span></span>
-                      <span>Ping <span className="text-foreground">{h.ping > 100 ? "超时" : `${h.ping}ms`}</span></span>
-                    </div>
-                  </div>
-                ))
-              )}
+                <Select value={taskFilter} onValueChange={setTaskFilter}>
+                  <SelectTrigger className="h-9 w-44"><SelectValue placeholder="全部任务" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部任务</SelectItem>
+                    {inspectionTasks.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-9 w-32"><SelectValue placeholder="全部状态" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部状态</SelectItem>
+                    <SelectItem value="已完成">已完成</SelectItem>
+                    <SelectItem value="运行中">运行中</SelectItem>
+                    <SelectItem value="失败">失败</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>巡检</TableHead>
+                  <TableHead>所属任务</TableHead>
+                  <TableHead>开始时间</TableHead>
+                  <TableHead>耗时</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead className="text-right">结果</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredRuns.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
+                      没有匹配的巡检记录
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredRuns.map((r) => {
+                    const task = inspectionTasks.find((t) => t.id === r.taskId);
+                    return (
+                      <TableRow key={r.id} className="hover:bg-secondary/40 cursor-pointer" onClick={() => openRun(r.id)}>
+                        <TableCell>
+                          <span className="font-medium tabular-nums">#{r.id.replace("run-", "")}</span>
+                          <div className="text-xs text-muted-foreground mt-0.5">{r.trigger} · {r.operator}</div>
+                        </TableCell>
+                        <TableCell className="text-sm">{task?.name ?? "—"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground tabular-nums">{r.startTime}</TableCell>
+                        <TableCell className="text-xs tabular-nums">{r.duration}</TableCell>
+                        <TableCell>
+                          <StatusBadge tone={statusTone(r.status)} dot={r.status === "运行中"}>{r.status}</StatusBadge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="inline-flex items-center gap-3 text-xs tabular-nums">
+                            <span className="text-success">正 {r.normal}</span>
+                            <span className="text-warning">关 {r.attention}</span>
+                            <span className="text-destructive">异 {r.abnormal}</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
           </div>
 
-          {/* 巡检发现的告警 */}
-          <div className="panel p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                <h3 className="font-semibold text-sm">巡检发现的告警</h3>
-              </div>
-              <span className="text-xs text-muted-foreground tabular-nums">共 {alerts.length} 条</span>
-            </div>
-            <div className="space-y-2">
-              {alerts.length === 0 ? (
-                <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
-                  当前无告警 ✓
+          <div className="space-y-4">
+            <div className="panel p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-sm">异常追踪</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">需要关注与处置的主机</p>
                 </div>
-              ) : (
-                alerts.map((a) => (
+                <span className="text-xs text-muted-foreground tabular-nums">共 {abnormalHosts.length} 台</span>
+              </div>
+
+              <div className="space-y-2">
+                {abnormalHosts.length === 0 ? (
+                  <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
+                    当前无异常 ✓
+                  </div>
+                ) : (
+                  abnormalHosts.map((h) => (
+                    <div key={h.id} className="rounded-lg border bg-card p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium truncate">{h.name}</span>
+                        <StatusBadge tone={statusTone(h.status)} dot={h.status === "异常"}>{h.status}</StatusBadge>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">{h.ip} · {h.group}</div>
+                      <div className="mt-2 grid grid-cols-4 gap-2 text-xs tabular-nums text-muted-foreground">
+                        <span>CPU <span className="text-foreground">{h.cpu}%</span></span>
+                        <span>内存 <span className="text-foreground">{h.memory}%</span></span>
+                        <span>磁盘 <span className="text-foreground">{h.disk}%</span></span>
+                        <span>Ping <span className="text-foreground">{h.ping > 100 ? "超时" : `${h.ping}ms`}</span></span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="panel p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <h3 className="font-semibold text-sm">巡检发现的告警</h3>
+                </div>
+                <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={() => switchView("abnormal")}>
+                  查看全部
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {alerts.slice(0, 3).map((a) => (
                   <div key={a.id} className="rounded-lg border-l-2 border-destructive bg-destructive-soft/30 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold truncate">{a.host} · {a.metric}</span>
                       <StatusBadge tone={statusTone(a.severity)}>{a.severity}</StatusBadge>
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      当前值：<span className="text-foreground font-medium tabular-nums">{a.value}</span>
-                    </div>
-                    <p className="text-xs text-foreground/80 mt-1.5 leading-relaxed">{a.description}</p>
+                    <p className="text-xs text-foreground/80 mt-1.5 leading-relaxed line-clamp-2">{a.description}</p>
                     <p className="text-xs text-muted-foreground mt-1.5 tabular-nums">{a.time}</p>
-                    <div className="mt-2 flex items-center gap-1.5">
-                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                        onClick={() => startAnalysis(a.id, a.host, a.metric)}>
-                        <Stethoscope className="h-3 w-3 mr-1" />发起故障分析
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
-                        onClick={() => askAbout(a.host, a.metric, a.description)}>
-                        <MessageSquareQuote className="h-3 w-3 mr-1" />追问
-                      </Button>
-                    </div>
                   </div>
-                ))
-              )}
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        /* ============ 待关注事项视图 ============ */
+        <div className="panel">
+          <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-3">
+            <div>
+              <h3 className="font-semibold">待关注事项</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                汇集巡检发现的「异常」与「关注」记录 · 支持发起故障分析或提问助手
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="搜索资产 / 指标 / 描述"
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  className="h-9 pl-8 w-56"
+                />
+              </div>
+              <Select value={levelFilter} onValueChange={setLevelFilter}>
+                <SelectTrigger className="h-9 w-28"><SelectValue placeholder="级别" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部级别</SelectItem>
+                  <SelectItem value="异常">异常</SelectItem>
+                  <SelectItem value="关注">关注</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={recStatusFilter} onValueChange={setRecStatusFilter}>
+                <SelectTrigger className="h-9 w-28"><SelectValue placeholder="状态" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部状态</SelectItem>
+                  <SelectItem value="待处理">待处理</SelectItem>
+                  <SelectItem value="分析中">分析中</SelectItem>
+                  <SelectItem value="已闭环">已闭环</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-20">级别</TableHead>
+                <TableHead>资产 / 指标</TableHead>
+                <TableHead>当前值</TableHead>
+                <TableHead>阈值</TableHead>
+                <TableHead>描述</TableHead>
+                <TableHead className="w-28">发生时间</TableHead>
+                <TableHead className="w-24">状态</TableHead>
+                <TableHead className="text-right w-56">操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredRecords.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-12 text-center text-sm text-muted-foreground">
+                    暂无匹配的待关注事项
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredRecords.map((r) => (
+                  <TableRow key={r.id} className="hover:bg-secondary/40">
+                    <TableCell>
+                      <StatusBadge tone={r.level === "异常" ? "destructive" : "warning"} dot={r.level === "异常"}>
+                        {r.level}
+                      </StatusBadge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm font-medium">{r.assetName}</div>
+                      <div className="text-xs text-muted-foreground">{r.metric}</div>
+                    </TableCell>
+                    <TableCell className="text-sm tabular-nums font-medium">{r.value}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground tabular-nums">{r.threshold}</TableCell>
+                    <TableCell className="text-xs text-foreground/80 max-w-sm truncate" title={r.description}>
+                      {r.description}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground tabular-nums">{r.time}</TableCell>
+                    <TableCell>
+                      <StatusBadge tone={r.status === "已闭环" ? "success" : r.status === "分析中" ? "info" : "warning"}>
+                        {r.status}
+                      </StatusBadge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="inline-flex items-center gap-1.5">
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                          onClick={() => startAnalysisById(r.id)}>
+                          <Stethoscope className="h-3 w-3 mr-1" />故障分析
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                          onClick={() => askAbout(
+                            `${r.assetName} · ${r.metric}`,
+                            r.id,
+                            r.evidenceSnapshot || r.description,
+                            r.level === "关注" ? "关注项" : "巡检异常"
+                          )}>
+                          <MessageSquareQuote className="h-3 w-3 mr-1" />智能问答
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+
+          <div className="flex items-center justify-between px-5 py-3 border-t bg-muted/20 text-xs text-muted-foreground">
+            <span>共 {filteredRecords.length} 条待关注事项</span>
+            <span>异常 {abnormalCount} · 关注 {attentionCount}</span>
+          </div>
+        </div>
+      )}
 
       {/* 单次巡检结果详情 */}
       <RunDetailSheet run={activeRun} task={activeTask} onClose={closeRun} />
     </div>
   );
 }
+
 
 function SummaryTile({
   icon: Icon, label, value, tone, sub,
