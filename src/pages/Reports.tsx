@@ -139,9 +139,9 @@ export default function Reports() {
       {/* 顶部统计概览 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <SummaryCard label={showArchived ? "已归档报告" : "本月报告总数"} value={showArchived ? stats.archivedCount : stats.total} icon={FileText} tone="primary" />
-        <SummaryCard label="巡检质量报告" value={stats.quality} icon={ShieldCheck} tone="success" hint="日报 / 周报" />
-        <SummaryCard label="风险研判报告" value={stats.risk} icon={AlertTriangle} tone="warning" hint="周报" />
-        <SummaryCard label="知识服务报告" value={stats.knowledge} icon={BookOpen} tone="info" hint="月报" />
+        <SummaryCard label="巡检报告" value={stats.quality} icon={ShieldCheck} tone="success" hint="日报 / 周报" />
+        <SummaryCard label="故障分析报告" value={stats.risk} icon={AlertTriangle} tone="warning" hint="异常/关注触发" />
+        <SummaryCard label="知识服务情况分析报告" value={stats.knowledge} icon={BookOpen} tone="info" hint="月报" />
       </div>
 
       {/* 工具条 */}
@@ -149,9 +149,9 @@ export default function Reports() {
         <Tabs value={active} onValueChange={(v) => setActive(v as any)}>
           <TabsList>
             <TabsTrigger value="全部">全部</TabsTrigger>
-            <TabsTrigger value="巡检质量报告">巡检质量</TabsTrigger>
-            <TabsTrigger value="风险研判报告">风险研判</TabsTrigger>
-            <TabsTrigger value="知识服务报告">知识服务</TabsTrigger>
+            <TabsTrigger value="巡检报告">巡检报告</TabsTrigger>
+            <TabsTrigger value="故障分析报告">故障分析</TabsTrigger>
+            <TabsTrigger value="知识服务情况分析报告">知识服务</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="flex items-center gap-2 flex-wrap">
