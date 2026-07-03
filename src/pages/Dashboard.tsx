@@ -40,13 +40,16 @@ import {
   inspectionDistribution,
   weeklyAlertTrend,
   reports,
+  abnormalRecords,
+  agentRuns,
 } from "@/lib/mockData";
+import { Bot, Sparkles, ArrowRight } from "lucide-react";
 
 const stats = [
-  { label: "纳管主机", value: "8", unit: "台", delta: "+0", icon: Server, tone: "info" as const },
+  { label: "纳管资产", value: "18", unit: "个", delta: "+2", icon: Server, tone: "info" as const },
   { label: "正常率", value: "75", unit: "%", delta: "-12.5%", icon: CheckCircle2, tone: "success" as const },
-  { label: "今日异常", value: "2", unit: "项", delta: "+2", icon: AlertTriangle, tone: "destructive" as const },
-  { label: "关注项", value: "2", unit: "项", delta: "+1", icon: TrendingUp, tone: "warning" as const },
+  { label: "待关注事项", value: "5", unit: "项", delta: "+2", icon: TrendingUp, tone: "warning" as const },
+  { label: "今日 Agent 调用", value: "126", unit: "次", delta: "+18", icon: Bot, tone: "info" as const },
 ];
 
 const toneClass: Record<string, string> = {
@@ -106,6 +109,83 @@ export default function Dashboard() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* 待关注事项 & Agent 工作情况 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="panel p-5 lg:col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="font-semibold flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-warning" /> 待关注事项
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">来自巡检异常与关注记录 · 建议尽快处置</p>
+            </div>
+            <Button asChild variant="ghost" size="sm" className="text-xs">
+              <Link to="/analysis">进入故障分析 <ArrowUpRight className="ml-1 h-3 w-3" /></Link>
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {abnormalRecords.slice(0, 5).map((r) => (
+              <Link key={r.id} to={`/analysis?record=${r.id}`}
+                className="flex items-center gap-3 rounded-lg border bg-card/50 px-3 py-2.5 hover:border-primary/40 hover:bg-primary-soft/30 transition group">
+                <StatusBadge tone={r.level === "异常" ? "destructive" : "warning"}>{r.level}</StatusBadge>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate">{r.assetName} · {r.metric}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">{r.value}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">{r.description}</p>
+                </div>
+                <StatusBadge tone={r.status === "已闭环" ? "success" : r.status === "分析中" ? "info" : "warning"}>
+                  {r.status}
+                </StatusBadge>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" /> Agent 工作情况
+            </h3>
+            <StatusBadge tone="success" dot>在线</StatusBadge>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            <div className="rounded-md bg-muted/40 py-2 text-center">
+              <div className="text-lg font-semibold text-success tabular-nums">98%</div>
+              <div className="text-xs text-muted-foreground">成功率</div>
+            </div>
+            <div className="rounded-md bg-muted/40 py-2 text-center">
+              <div className="text-lg font-semibold text-primary tabular-nums">126</div>
+              <div className="text-xs text-muted-foreground">今日调用</div>
+            </div>
+            <div className="rounded-md bg-muted/40 py-2 text-center">
+              <div className="text-lg font-semibold text-info tabular-nums">720ms</div>
+              <div className="text-xs text-muted-foreground">平均耗时</div>
+            </div>
+          </div>
+          <div className="space-y-1.5 max-h-56 overflow-y-auto">
+            {agentRuns.slice(0, 5).map((a) => (
+              <div key={a.id} className="rounded-md border bg-card/50 px-2.5 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium truncate">{a.agent}</span>
+                  <StatusBadge tone={a.status === "成功" ? "success" : "destructive"}>{a.status}</StatusBadge>
+                </div>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">{a.task}</p>
+                <div className="flex items-center justify-between text-xs text-muted-foreground mt-0.5">
+                  <span className="tabular-nums">{a.startTime.split(" ")[1]}</span>
+                  <span className="tabular-nums">{a.duration}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Button asChild variant="ghost" size="sm" className="w-full mt-2 text-xs">
+            <Link to="/audit">查看 Agent 调用日志 <ArrowUpRight className="ml-1 h-3 w-3" /></Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

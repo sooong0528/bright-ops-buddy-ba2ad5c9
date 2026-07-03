@@ -13,17 +13,37 @@ import {
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
 import { auditLogs } from "@/lib/mockData";
 
+const CATEGORIES = ["全部", "用户操作", "任务执行", "Agent 调用", "数据来源"] as const;
+type Cat = typeof CATEGORIES[number];
+
+const catTone: Record<string, "info" | "warning" | "success" | "destructive"> = {
+  "用户操作": "info",
+  "任务执行": "success",
+  "Agent 调用": "warning",
+  "数据来源": "info",
+};
+
 export default function Audit() {
   const [q, setQ] = useState("");
-  const list = auditLogs.filter((l) => q === "" || l.user.includes(q) || l.action.includes(q) || l.target.includes(q));
+  const [cat, setCat] = useState<Cat>("全部");
+  const list = auditLogs.filter((l) => {
+    const matchQ = q === "" || l.user.includes(q) || l.action.includes(q) || l.target.includes(q);
+    const matchC = cat === "全部" || l.category === cat;
+    return matchQ && matchC;
+  });
+
+  const counts = CATEGORIES.reduce((acc, c) => {
+    acc[c] = c === "全部" ? auditLogs.length : auditLogs.filter((l) => l.category === c).length;
+    return acc;
+  }, {} as Record<string, number>);
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Tile label="今日操作" value="24" />
-        <Tile label="自动任务" value="14" />
-        <Tile label="用户操作" value="9" />
-        <Tile label="失败操作" value="1" tone="destructive" />
+        <Tile label="用户操作" value={String(counts["用户操作"])} />
+        <Tile label="任务执行" value={String(counts["任务执行"])} />
+        <Tile label="Agent 调用" value={String(counts["Agent 调用"])} />
+        <Tile label="失败操作" value={String(auditLogs.filter((l) => l.result === "失败").length)} tone="destructive" />
       </div>
 
       <div className="panel">
@@ -34,7 +54,7 @@ export default function Audit() {
             </div>
             <div>
               <h3 className="font-semibold">审计留痕</h3>
-              <p className="text-xs text-muted-foreground">任务、问答、报告、知识维护、用户操作全过程留痕</p>
+              <p className="text-xs text-muted-foreground">用户操作 · 任务执行 · Agent 调用 · 数据来源 全过程留痕</p>
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -47,10 +67,22 @@ export default function Audit() {
           </div>
         </div>
 
+        <div className="px-5 pb-3 flex gap-1.5 flex-wrap">
+          {CATEGORIES.map((c) => (
+            <button key={c} onClick={() => setCat(c)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition ${
+                cat === c ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-secondary"
+              }`}>
+              {c} <span className="opacity-70 tabular-nums ml-1">{counts[c]}</span>
+            </button>
+          ))}
+        </div>
+
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-44">时间</TableHead>
+              <TableHead className="w-24">类别</TableHead>
               <TableHead>用户</TableHead>
               <TableHead>操作</TableHead>
               <TableHead>对象</TableHead>
@@ -62,10 +94,11 @@ export default function Audit() {
             {list.map((l) => (
               <TableRow key={l.id} className="hover:bg-secondary/40">
                 <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">{l.time}</TableCell>
+                <TableCell><StatusBadge tone={catTone[l.category] || "info"}>{l.category}</StatusBadge></TableCell>
                 <TableCell>
                   <span className={`text-sm font-medium ${l.user === "系统" ? "text-info" : ""}`}>{l.user}</span>
                 </TableCell>
-                <TableCell><StatusBadge tone="info">{l.action}</StatusBadge></TableCell>
+                <TableCell className="text-sm">{l.action}</TableCell>
                 <TableCell className="text-sm">{l.target}</TableCell>
                 <TableCell><StatusBadge tone={statusTone(l.result)} dot={l.result === "失败"}>{l.result}</StatusBadge></TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{l.ip}</TableCell>
