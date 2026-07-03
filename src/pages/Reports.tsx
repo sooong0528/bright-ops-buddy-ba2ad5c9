@@ -90,9 +90,9 @@ export default function Reports() {
     const visible = reports.filter((r) => !getMeta(r.id).archived);
     return {
       total: visible.length,
-      quality: visible.filter((r) => r.category === "巡检质量报告").length,
-      risk: visible.filter((r) => r.category === "风险研判报告").length,
-      knowledge: visible.filter((r) => r.category === "知识服务报告").length,
+      quality: visible.filter((r) => r.category === "巡检报告").length,
+      risk: visible.filter((r) => r.category === "故障分析报告").length,
+      knowledge: visible.filter((r) => r.category === "知识服务情况分析报告").length,
       archivedCount: reports.length - visible.length,
     };
   }, [meta]);
