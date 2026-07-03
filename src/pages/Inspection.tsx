@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   CheckCircle2,
   AlertCircle,
@@ -7,6 +7,8 @@ import {
   RefreshCw,
   Search,
   ListChecks,
+  Stethoscope,
+  MessageSquareQuote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,12 +41,27 @@ type RangeKey = "today" | "week" | "month";
 
 export default function Inspection() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [range, setRange] = useState<RangeKey>("today");
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [taskFilter, setTaskFilter] = useState<string>("all");
+
+  function startAnalysis(alertId: string, host: string, metric: string) {
+    navigate(`/analysis?alert=${alertId}`);
+  }
+  function askAbout(host: string, metric: string, description: string) {
+    sessionStorage.setItem("assistant.context", JSON.stringify({
+      sourceType: "巡检异常",
+      sourceId: `${host}-${metric}`,
+      title: `${host} · ${metric}`,
+      snapshot: description,
+    }));
+    navigate("/assistant");
+  }
+
 
   // Mock 时间筛选：演示数据较少，统一返回全部，但保留筛选交互
   const filteredRuns = useMemo(() => {
@@ -285,6 +302,16 @@ export default function Inspection() {
                     </div>
                     <p className="text-xs text-foreground/80 mt-1.5 leading-relaxed">{a.description}</p>
                     <p className="text-xs text-muted-foreground mt-1.5 tabular-nums">{a.time}</p>
+                    <div className="mt-2 flex items-center gap-1.5">
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                        onClick={() => startAnalysis(a.id, a.host, a.metric)}>
+                        <Stethoscope className="h-3 w-3 mr-1" />发起故障分析
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                        onClick={() => askAbout(a.host, a.metric, a.description)}>
+                        <MessageSquareQuote className="h-3 w-3 mr-1" />追问
+                      </Button>
+                    </div>
                   </div>
                 ))
               )}
