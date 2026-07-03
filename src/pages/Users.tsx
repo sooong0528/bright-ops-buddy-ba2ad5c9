@@ -83,7 +83,7 @@ export default function UsersPage() {
                 </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{u.account}</TableCell>
                 <TableCell>
-                  <StatusBadge tone={u.role === "管理员" ? "destructive" : u.role === "运维用户" ? "info" : "muted"}>
+                  <StatusBadge tone={u.role === "系统管理员" ? "destructive" : u.role === "运维人员" ? "info" : "muted"}>
                     {u.role}
                   </StatusBadge>
                 </TableCell>
