@@ -12,6 +12,8 @@ import Reports from "./pages/Reports";
 import Knowledge from "./pages/Knowledge";
 import Users from "./pages/Users";
 import Audit from "./pages/Audit";
+import Assets from "./pages/Assets";
+import Analysis from "./pages/Analysis";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -26,9 +28,11 @@ const App = () => (
           <Route element={<AppLayout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/inspection" element={<Inspection />} />
-            <Route path="/inspection-admin" element={<InspectionAdmin />} />
+            <Route path="/analysis" element={<Analysis />} />
             <Route path="/assistant" element={<Assistant />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/assets" element={<Assets />} />
+            <Route path="/inspection-admin" element={<InspectionAdmin />} />
             <Route path="/knowledge" element={<Knowledge />} />
             <Route path="/users" element={<Users />} />
             <Route path="/audit" element={<Audit />} />
