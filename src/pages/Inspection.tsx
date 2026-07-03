@@ -165,23 +165,25 @@ export default function Inspection() {
 
   return (
     <div className="space-y-6">
-      {/* 顶部：视图切换 + 时间范围 + 操作 */}
+      {/* 巡检状态总览 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <SummaryTile icon={ListChecks} label="巡检完成率" value={`${stats.completionRate}%`} tone="info" sub={`已完成 ${stats.finished} / 共 ${stats.totalRuns} 次`} />
+        <SummaryTile icon={CheckCircle2} label="主机正常项" value={String(stats.normal)} tone="success" />
+        <SummaryTile icon={AlertCircle} label="关注项" value={String(attentionCount)} tone="warning" />
+        <SummaryTile icon={AlertTriangle} label="异常项" value={String(abnormalCount)} tone="destructive" />
+      </div>
+
+      {/* 工具条：视图切换 + 时间范围 + 操作 */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-4">
-          <div>
-            <h2 className="text-lg font-semibold">巡检中心</h2>
-            <p className="text-xs text-muted-foreground mt-1">查看巡检状态、结果与待关注事项 · 面向运维与值班人员</p>
-          </div>
-          <Tabs value={view} onValueChange={(v) => switchView(v as ViewKey)}>
-            <TabsList>
-              <TabsTrigger value="results">巡检结果</TabsTrigger>
-              <TabsTrigger value="abnormal">
-                待关注事项
-                <span className="ml-1.5 text-xs text-muted-foreground tabular-nums">{abnormalRecords.length}</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
+        <Tabs value={view} onValueChange={(v) => switchView(v as ViewKey)}>
+          <TabsList>
+            <TabsTrigger value="results">巡检结果</TabsTrigger>
+            <TabsTrigger value="abnormal">
+              待关注事项
+              <span className="ml-1.5 text-xs text-muted-foreground tabular-nums">{abnormalRecords.length}</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
         <div className="flex items-center gap-2">
           {view === "results" && (
             <Tabs value={range} onValueChange={(v) => setRange(v as RangeKey)}>
@@ -196,13 +198,6 @@ export default function Inspection() {
         </div>
       </div>
 
-      {/* 巡检状态总览 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <SummaryTile icon={ListChecks} label="巡检完成率" value={`${stats.completionRate}%`} tone="info" sub={`已完成 ${stats.finished} / 共 ${stats.totalRuns} 次`} />
-        <SummaryTile icon={CheckCircle2} label="主机正常项" value={String(stats.normal)} tone="success" />
-        <SummaryTile icon={AlertCircle} label="关注项" value={String(attentionCount)} tone="warning" />
-        <SummaryTile icon={AlertTriangle} label="异常项" value={String(abnormalCount)} tone="destructive" />
-      </div>
 
       {view === "results" ? (
         /* ============ 巡检结果视图 ============ */
