@@ -547,8 +547,7 @@ function AnalysisReport({ report }: { report: ReportItem }) {
         </ul>
       </Section>
 
-      <Section title="八、影响与证据链">
-        <p className="text-sm mb-2 text-foreground/85">{a.impact}</p>
+      <Section title="八、证据链">
         <ul className="space-y-1 text-xs text-muted-foreground list-disc ml-5">
           {a.evidence.map((e, i) => <li key={i}>{e}</li>)}
         </ul>
