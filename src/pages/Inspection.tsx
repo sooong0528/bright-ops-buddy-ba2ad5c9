@@ -290,7 +290,8 @@ export default function Inspection() {
               </TableBody>
             </Table>
           </div>
-
+        </div>
+      ) : (
         /* ============ 待关注事项视图 ============ */
         <div className="panel">
           <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-3">
