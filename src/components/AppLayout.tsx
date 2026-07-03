@@ -8,13 +8,15 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const titleMap: Record<string, { title: string; sub: string }> = {
   "/": { title: "总览驾驶舱", sub: "平台运行态势与关键指标一览" },
-  "/inspection": { title: "巡检中心", sub: "巡检任务调度、结果分析与关注项识别" },
-  "/inspection-admin": { title: "巡检管理", sub: "巡检任务配置与判定规则管理" },
-  "/assistant": { title: "智能问答", sub: "知识增强问答 · 引用手册、SOP、案例" },
-  "/reports": { title: "报告中心", sub: "巡检日报 / 周报 / 异常摘要 / 问答记录" },
-  "/knowledge": { title: "知识库管理", sub: "运维手册、SOP、故障案例与 FAQ 维护" },
+  "/inspection": { title: "巡检中心", sub: "巡检状态、结果与异常追踪" },
+  "/analysis": { title: "故障分析", sub: "面向异常与关注记录的辅助研判" },
+  "/inspection-admin": { title: "巡检配置管理", sub: "巡检任务配置与判定规则管理" },
+  "/assistant": { title: "智能问答", sub: "知识库问答 · 数据查询 · 上下文追问" },
+  "/reports": { title: "报告中心", sub: "巡检报告 / 故障分析报告 / 知识服务情况分析报告" },
+  "/assets": { title: "资产管理", sub: "轻量资产档案与观测配置" },
+  "/knowledge": { title: "知识库管理", sub: "运维手册、SOP、故障案例、应急预案维护" },
   "/users": { title: "用户与权限", sub: "账号、角色与访问权限管理" },
-  "/audit": { title: "审计留痕", sub: "任务、问答、报告与操作的全过程留痕" },
+  "/audit": { title: "审计留痕", sub: "任务、问答、报告、Agent 与数据来源全过程留痕" },
 };
 
 export default function AppLayout() {
