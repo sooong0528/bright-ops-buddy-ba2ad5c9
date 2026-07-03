@@ -31,23 +31,23 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 const categoryMeta: Record<ReportCategory, { icon: any; color: string; bg: string; desc: string }> = {
-  巡检质量报告: {
+  巡检报告: {
     icon: ShieldCheck,
     color: "text-primary",
     bg: "bg-primary-soft",
-    desc: "聚焦巡检完成率、覆盖率与异常项分布",
+    desc: "聚焦巡检完成率、覆盖率与异常项分布（日报 / 周报）",
   },
-  风险研判报告: {
+  故障分析报告: {
     icon: AlertTriangle,
     color: "text-warning",
     bg: "bg-warning/10",
-    desc: "聚焦异常分析、风险判断与重点关注对象",
+    desc: "针对异常/关注记录形成的原因假设与处置建议",
   },
-  知识服务报告: {
+  知识服务情况分析报告: {
     icon: BookOpen,
     color: "text-info",
     bg: "bg-info/10",
-    desc: "聚焦知识库对运维工作的支撑能力",
+    desc: "聚焦知识库对运维工作的支撑能力（月报）",
   },
 };
 
@@ -90,9 +90,9 @@ export default function Reports() {
     const visible = reports.filter((r) => !getMeta(r.id).archived);
     return {
       total: visible.length,
-      quality: visible.filter((r) => r.category === "巡检质量报告").length,
-      risk: visible.filter((r) => r.category === "风险研判报告").length,
-      knowledge: visible.filter((r) => r.category === "知识服务报告").length,
+      quality: visible.filter((r) => r.category === "巡检报告").length,
+      risk: visible.filter((r) => r.category === "故障分析报告").length,
+      knowledge: visible.filter((r) => r.category === "知识服务情况分析报告").length,
       archivedCount: reports.length - visible.length,
     };
   }, [meta]);
@@ -139,9 +139,9 @@ export default function Reports() {
       {/* 顶部统计概览 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <SummaryCard label={showArchived ? "已归档报告" : "本月报告总数"} value={showArchived ? stats.archivedCount : stats.total} icon={FileText} tone="primary" />
-        <SummaryCard label="巡检质量报告" value={stats.quality} icon={ShieldCheck} tone="success" hint="日报 / 周报" />
-        <SummaryCard label="风险研判报告" value={stats.risk} icon={AlertTriangle} tone="warning" hint="周报" />
-        <SummaryCard label="知识服务报告" value={stats.knowledge} icon={BookOpen} tone="info" hint="月报" />
+        <SummaryCard label="巡检报告" value={stats.quality} icon={ShieldCheck} tone="success" hint="日报 / 周报" />
+        <SummaryCard label="故障分析报告" value={stats.risk} icon={AlertTriangle} tone="warning" hint="异常/关注触发" />
+        <SummaryCard label="知识服务情况分析报告" value={stats.knowledge} icon={BookOpen} tone="info" hint="月报" />
       </div>
 
       {/* 工具条 */}
@@ -149,9 +149,9 @@ export default function Reports() {
         <Tabs value={active} onValueChange={(v) => setActive(v as any)}>
           <TabsList>
             <TabsTrigger value="全部">全部</TabsTrigger>
-            <TabsTrigger value="巡检质量报告">巡检质量</TabsTrigger>
-            <TabsTrigger value="风险研判报告">风险研判</TabsTrigger>
-            <TabsTrigger value="知识服务报告">知识服务</TabsTrigger>
+            <TabsTrigger value="巡检报告">巡检报告</TabsTrigger>
+            <TabsTrigger value="故障分析报告">故障分析</TabsTrigger>
+            <TabsTrigger value="知识服务情况分析报告">知识服务</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="flex items-center gap-2 flex-wrap">
@@ -281,9 +281,9 @@ export default function Reports() {
                   onArchive={() => handleArchive(selected)}
                 />
                 <div className="mt-5 space-y-5 text-sm leading-relaxed">
-                  {selected.category === "巡检质量报告" && <QualityReport report={selected} />}
-                  {selected.category === "风险研判报告" && <RiskReport report={selected} />}
-                  {selected.category === "知识服务报告" && <KnowledgeReport report={selected} />}
+                  {selected.category === "巡检报告" && <QualityReport report={selected} />}
+                  {selected.category === "故障分析报告" && <AnalysisReport report={selected} />}
+                  {selected.category === "知识服务情况分析报告" && <KnowledgeReport report={selected} />}
 
                   {/* 人工备注 */}
                   <Section title={<span className="flex items-center gap-1.5"><StickyNote className="h-4 w-4 text-primary" />人工备注</span>}>
@@ -471,84 +471,86 @@ function QualityReport({ report }: { report: ReportItem }) {
   );
 }
 
-/* ---------- 风险研判报告 ---------- */
-function RiskReport({ report }: { report: ReportItem }) {
-  const r = report.risk!;
-  const levelTone = r.riskLevel === "高" ? "destructive" : r.riskLevel === "中" ? "warning" : "success";
+/* ---------- 故障分析报告 ---------- */
+function AnalysisReport({ report }: { report: ReportItem }) {
+  const a = report.analysis!;
+  const pTone = a.priority === "高" ? "destructive" : a.priority === "中" ? "warning" : "success";
+  const sevTone = a.severity === "严重" ? "destructive" : a.severity === "警告" ? "warning" : "info";
 
   return (
     <>
-      <Section title="一、整体风险评估">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className={`rounded-lg border p-4 ${levelTone === "destructive" ? "bg-destructive/5 border-destructive/30" : levelTone === "warning" ? "bg-warning/5 border-warning/30" : "bg-success/5 border-success/30"}`}>
-            <p className="text-xs text-muted-foreground mb-1">风险等级</p>
-            <p className={`text-3xl font-bold ${levelTone === "destructive" ? "text-destructive" : levelTone === "warning" ? "text-warning" : "text-success"}`}>{r.riskLevel}</p>
-            <p className="text-xs text-muted-foreground mt-1">综合评分 {r.riskScore} / 100</p>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-xs text-muted-foreground mb-1">关键告警</p>
-            <p className="text-3xl font-bold">{r.keyAlerts.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">需重点关注</p>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-xs text-muted-foreground mb-1">重点对象</p>
-            <p className="text-3xl font-bold">{r.focusHosts.length}</p>
-            <p className="text-xs text-muted-foreground mt-1 truncate">{r.focusHosts.join("、")}</p>
-          </div>
+      <Section title="一、报告摘要">
+        <div className="flex flex-wrap gap-2 mb-2">
+          <StatusBadge tone={sevTone}>{a.severity}</StatusBadge>
+          <StatusBadge tone={pTone as any}>优先级 {a.priority}</StatusBadge>
+          <StatusBadge tone="muted">异常记录 {a.recordId}</StatusBadge>
+          <StatusBadge tone="info">{a.asset}</StatusBadge>
         </div>
-        <p className="mt-3 text-foreground/85">{report.summary}</p>
+        <p>{report.summary}</p>
       </Section>
 
-      <Section title="二、关键异常分析">
-        <div className="space-y-2">
-          {r.keyAlerts.map((a, i) => (
-            <div key={i} className="rounded-lg border bg-card p-3 flex items-start gap-3">
-              <StatusBadge
-                tone={a.severity === "严重" ? "destructive" : a.severity === "警告" ? "warning" : "info"}
-                className="shrink-0 mt-0.5"
-              >
-                {a.severity}
-              </StatusBadge>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">
-                  {a.host} <span className="text-muted-foreground font-normal">· {a.metric}</span>
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                  <TrendingUp className="h-3 w-3 text-warning" /> {a.trend}
-                </p>
-              </div>
+      <Section title="二、指标趋势">
+        <div className="rounded-lg border bg-card p-3 text-sm text-foreground/85">
+          {a.metricTrendSummary}
+        </div>
+      </Section>
+
+      <Section title="三、日志关键片段">
+        <div className="rounded-lg border bg-card divide-y">
+          {a.logHits.map((h, i) => (
+            <div key={i} className="px-3 py-2 text-xs">
+              <span className="text-muted-foreground tabular-nums mr-2">{h.time}</span>
+              <span className="text-primary mr-2">{h.source}</span>
+              <span className="text-foreground/85">{h.text}</span>
             </div>
           ))}
         </div>
       </Section>
 
-      <Section title="三、根因研判">
+      <Section title="四、知识库引用">
+        <div className="space-y-2">
+          {a.knowledgeRefs.map((k, i) => (
+            <div key={i} className="rounded-lg border bg-card p-3">
+              <p className="text-sm font-medium flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-info" />{k.title}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">{k.snippet}</p>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="五、原因假设">
         <ul className="space-y-1.5 list-none">
-          {r.rootCauses.map((c, i) => (
+          {a.hypotheses.map((h, i) => (
             <li key={i} className="flex gap-2 items-start text-foreground/85">
               <span className="h-5 w-5 rounded-md bg-warning/15 text-warning flex items-center justify-center text-xs font-semibold shrink-0">{i + 1}</span>
-              <span className="pt-0.5 text-sm">{c}</span>
+              <span className="pt-0.5 text-sm">{h}</span>
             </li>
           ))}
         </ul>
       </Section>
 
-      <Section title="四、重点关注对象">
-        <div className="flex flex-wrap gap-2">
-          {r.focusHosts.map((h) => (
-            <span key={h} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md bg-warning/10 border border-warning/30 text-warning font-medium">
-              <AlertTriangle className="h-3.5 w-3.5" /> {h}
-            </span>
-          ))}
-        </div>
+      <Section title="六、处置建议">
+        <ol className="space-y-1.5 ml-4 list-decimal text-foreground/85">
+          {a.actions.map((s, i) => <li key={i} className="text-sm">{s}</li>)}
+        </ol>
       </Section>
 
-      <Section title="五、应对建议">
-        <ol className="space-y-2 ml-4 list-decimal text-foreground/85">
-          {r.recommendations.map((rec, i) => (
-            <li key={i} className="text-sm">{rec}</li>
+      <Section title="七、人工确认事项">
+        <ul className="space-y-1.5 list-none">
+          {a.humanConfirm.map((s, i) => (
+            <li key={i} className="flex gap-2 items-start text-foreground/85 text-sm rounded-md border border-dashed p-2">
+              <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />{s}
+            </li>
           ))}
-        </ol>
+        </ul>
+      </Section>
+
+      <Section title="八、证据链">
+        <ul className="space-y-1 text-xs text-muted-foreground list-disc ml-5">
+          {a.evidence.map((e, i) => <li key={i}>{e}</li>)}
+        </ul>
       </Section>
     </>
   );
