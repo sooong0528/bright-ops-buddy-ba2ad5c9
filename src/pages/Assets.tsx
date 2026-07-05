@@ -164,7 +164,7 @@ export default function Assets() {
           <TableBody>
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-10">暂无匹配的资产</TableCell>
+                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-10">暂无匹配的资产</TableCell>
               </TableRow>
             )}
             {filtered.map((a) => {
