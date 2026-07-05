@@ -155,7 +155,7 @@ export default function Assets() {
               <TableHead>业务系统</TableHead>
               <TableHead>IP / 端口</TableHead>
               <TableHead>环境</TableHead>
-              <TableHead>重要性</TableHead>
+              
               <TableHead>责任人</TableHead>
               <TableHead>观测配置</TableHead>
               <TableHead className="text-right">操作</TableHead>
@@ -164,7 +164,7 @@ export default function Assets() {
           <TableBody>
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-10">暂无匹配的资产</TableCell>
+                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-10">暂无匹配的资产</TableCell>
               </TableRow>
             )}
             {filtered.map((a) => {
@@ -183,10 +183,12 @@ export default function Assets() {
                   <TableCell className="text-sm">{a.businessSystem}</TableCell>
                   <TableCell className="text-xs font-mono text-muted-foreground">{a.ip}{a.port ? ` : ${a.port}` : ""}</TableCell>
                   <TableCell><StatusBadge tone={a.environment === "生产" ? "destructive" : "muted"}>{a.environment}</StatusBadge></TableCell>
-                  <TableCell><StatusBadge tone={a.importance === "核心" ? "destructive" : a.importance === "重要" ? "warning" : "muted"}>{a.importance}</StatusBadge></TableCell>
                   <TableCell className="text-sm text-muted-foreground">{a.owner}</TableCell>
                   <TableCell><StatusBadge tone={obsTone} dot>{a.observationStatus}</StatusBadge></TableCell>
                   <TableCell className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <Button size="sm" variant="ghost" onClick={() => setOpenId(a.id)}>
+                      <Settings2 className="h-4 w-4 mr-1" />观测配置
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => openEdit(a)}>
                       <Pencil className="h-4 w-4 mr-1" />编辑
                     </Button>
