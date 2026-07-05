@@ -23,7 +23,16 @@ const typeMeta: Record<AssetType, { icon: any; color: string; bg: string }> = {
 
 const assetTypes: AssetType[] = ["主机", "数据库", "应用服务", "中间件"];
 const environments: Environment[] = ["生产", "预生产", "测试"];
-const importances: Importance[] = ["核心", "重要", "一般"];
+
+function computeObservationStatus(assetId: string): Asset["observationStatus"] {
+  const cfg = observationConfigs[assetId];
+  if (!cfg) return "未配置";
+  const hasItems = (cfg.items?.length ?? 0) > 0;
+  const hasLogs = (cfg.logSources?.length ?? 0) > 0;
+  if (hasItems && hasLogs) return "已配置";
+  if (hasItems || hasLogs) return "部分配置";
+  return "未配置";
+}
 
 type FormState = Partial<Asset>;
 
