@@ -249,14 +249,6 @@ export default function Assets() {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="重要性" required>
-              <Select value={form.importance} onValueChange={(v) => setForm({ ...form, importance: v as Importance })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {importances.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </Field>
             <Field label="状态">
               <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as Asset["status"] })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -268,16 +260,6 @@ export default function Assets() {
             </Field>
             <Field label="责任人" required>
               <Input value={form.owner ?? ""} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
-            </Field>
-            <Field label="观测配置状态">
-              <Select value={form.observationStatus} onValueChange={(v) => setForm({ ...form, observationStatus: v as Asset["observationStatus"] })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="已配置">已配置</SelectItem>
-                  <SelectItem value="部分配置">部分配置</SelectItem>
-                  <SelectItem value="未配置">未配置</SelectItem>
-                </SelectContent>
-              </Select>
             </Field>
             <Field label="主机名 / Hostname">
               <Input value={form.hostname ?? ""} onChange={(e) => setForm({ ...form, hostname: e.target.value })} />
