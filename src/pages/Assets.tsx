@@ -183,10 +183,12 @@ export default function Assets() {
                   <TableCell className="text-sm">{a.businessSystem}</TableCell>
                   <TableCell className="text-xs font-mono text-muted-foreground">{a.ip}{a.port ? ` : ${a.port}` : ""}</TableCell>
                   <TableCell><StatusBadge tone={a.environment === "生产" ? "destructive" : "muted"}>{a.environment}</StatusBadge></TableCell>
-                  <TableCell><StatusBadge tone={a.importance === "核心" ? "destructive" : a.importance === "重要" ? "warning" : "muted"}>{a.importance}</StatusBadge></TableCell>
                   <TableCell className="text-sm text-muted-foreground">{a.owner}</TableCell>
                   <TableCell><StatusBadge tone={obsTone} dot>{a.observationStatus}</StatusBadge></TableCell>
                   <TableCell className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <Button size="sm" variant="ghost" onClick={() => setOpenId(a.id)}>
+                      <Settings2 className="h-4 w-4 mr-1" />观测配置
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => openEdit(a)}>
                       <Pencil className="h-4 w-4 mr-1" />编辑
                     </Button>
