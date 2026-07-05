@@ -179,7 +179,8 @@ export default function Assets() {
             {filtered.map((a) => {
               const meta = typeMeta[a.type];
               const Icon = meta.icon;
-              const obsTone = a.observationStatus === "已配置" ? "success" : a.observationStatus === "部分配置" ? "warning" : "muted";
+              const obsStatus = computeObservationStatus(a.id);
+              const obsTone = obsStatus === "已配置" ? "success" : obsStatus === "部分配置" ? "warning" : "muted";
               return (
                 <TableRow key={a.id} className="cursor-pointer hover:bg-muted/40" onClick={() => setOpenId(a.id)}>
                   <TableCell className="font-mono text-xs">{a.code}</TableCell>
