@@ -372,7 +372,7 @@ function AssetDetail({ asset, onEdit }: { asset: Asset; onEdit: () => void }) {
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <Info label="业务系统" value={asset.businessSystem} />
             <Info label="环境" value={asset.environment} />
-            <Info label="重要性" value={asset.importance} />
+            <Info label="观测配置" value={computeObservationStatus(asset.id)} />
             <Info label="状态" value={asset.status} />
             <Info label="IP / 端口" value={`${asset.ip}${asset.port ? ` : ${asset.port}` : ""}`} />
             <Info label="责任人" value={asset.owner} />
