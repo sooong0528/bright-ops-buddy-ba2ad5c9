@@ -155,7 +155,7 @@ export default function Assets() {
               <TableHead>业务系统</TableHead>
               <TableHead>IP / 端口</TableHead>
               <TableHead>环境</TableHead>
-              <TableHead>重要性</TableHead>
+              
               <TableHead>责任人</TableHead>
               <TableHead>观测配置</TableHead>
               <TableHead className="text-right">操作</TableHead>
