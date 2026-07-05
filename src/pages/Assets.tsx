@@ -4,7 +4,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { assets as initialAssets, observationConfigs, type Asset, type AssetType, type Environment, type Importance } from "@/lib/mockData";
+import { assets as initialAssets, observationConfigs, type Asset, type AssetType, type Environment } from "@/lib/mockData";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
@@ -23,7 +23,16 @@ const typeMeta: Record<AssetType, { icon: any; color: string; bg: string }> = {
 
 const assetTypes: AssetType[] = ["主机", "数据库", "应用服务", "中间件"];
 const environments: Environment[] = ["生产", "预生产", "测试"];
-const importances: Importance[] = ["核心", "重要", "一般"];
+
+function computeObservationStatus(assetId: string): Asset["observationStatus"] {
+  const cfg = observationConfigs[assetId];
+  if (!cfg) return "未配置";
+  const hasItems = (cfg.items?.length ?? 0) > 0;
+  const hasLogs = (cfg.logSources?.length ?? 0) > 0;
+  if (hasItems && hasLogs) return "已配置";
+  if (hasItems || hasLogs) return "部分配置";
+  return "未配置";
+}
 
 type FormState = Partial<Asset>;
 
@@ -170,7 +179,8 @@ export default function Assets() {
             {filtered.map((a) => {
               const meta = typeMeta[a.type];
               const Icon = meta.icon;
-              const obsTone = a.observationStatus === "已配置" ? "success" : a.observationStatus === "部分配置" ? "warning" : "muted";
+              const obsStatus = computeObservationStatus(a.id);
+              const obsTone = obsStatus === "已配置" ? "success" : obsStatus === "部分配置" ? "warning" : "muted";
               return (
                 <TableRow key={a.id} className="cursor-pointer hover:bg-muted/40" onClick={() => setOpenId(a.id)}>
                   <TableCell className="font-mono text-xs">{a.code}</TableCell>
@@ -184,7 +194,7 @@ export default function Assets() {
                   <TableCell className="text-xs font-mono text-muted-foreground">{a.ip}{a.port ? ` : ${a.port}` : ""}</TableCell>
                   <TableCell><StatusBadge tone={a.environment === "生产" ? "destructive" : "muted"}>{a.environment}</StatusBadge></TableCell>
                   <TableCell className="text-sm text-muted-foreground">{a.owner}</TableCell>
-                  <TableCell><StatusBadge tone={obsTone} dot>{a.observationStatus}</StatusBadge></TableCell>
+                  <TableCell><StatusBadge tone={obsTone} dot>{obsStatus}</StatusBadge></TableCell>
                   <TableCell className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     <Button size="sm" variant="ghost" onClick={() => setOpenId(a.id)}>
                       <Settings2 className="h-4 w-4 mr-1" />观测配置
@@ -249,14 +259,6 @@ export default function Assets() {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="重要性" required>
-              <Select value={form.importance} onValueChange={(v) => setForm({ ...form, importance: v as Importance })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {importances.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </Field>
             <Field label="状态">
               <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as Asset["status"] })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -268,16 +270,6 @@ export default function Assets() {
             </Field>
             <Field label="责任人" required>
               <Input value={form.owner ?? ""} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
-            </Field>
-            <Field label="观测配置状态">
-              <Select value={form.observationStatus} onValueChange={(v) => setForm({ ...form, observationStatus: v as Asset["observationStatus"] })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="已配置">已配置</SelectItem>
-                  <SelectItem value="部分配置">部分配置</SelectItem>
-                  <SelectItem value="未配置">未配置</SelectItem>
-                </SelectContent>
-              </Select>
             </Field>
             <Field label="主机名 / Hostname">
               <Input value={form.hostname ?? ""} onChange={(e) => setForm({ ...form, hostname: e.target.value })} />
@@ -380,7 +372,7 @@ function AssetDetail({ asset, onEdit }: { asset: Asset; onEdit: () => void }) {
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <Info label="业务系统" value={asset.businessSystem} />
             <Info label="环境" value={asset.environment} />
-            <Info label="重要性" value={asset.importance} />
+            <Info label="观测配置" value={computeObservationStatus(asset.id)} />
             <Info label="状态" value={asset.status} />
             <Info label="IP / 端口" value={`${asset.ip}${asset.port ? ` : ${asset.port}` : ""}`} />
             <Info label="责任人" value={asset.owner} />
