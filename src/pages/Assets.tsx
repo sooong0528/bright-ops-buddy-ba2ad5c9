@@ -420,7 +420,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
-/* ============ 观测配置编辑器 ============ */
+/* ============ 观测配置编辑器（侧抽屉 + Zabbix / 日志 两类 Tab） ============ */
 function ObservationEditor({
   asset, value, onCancel, onSave,
 }: {
@@ -431,16 +431,27 @@ function ObservationEditor({
 }) {
   const [hostItems, setHostItems] = useState<Record<string, string[]>>(value.hostItems ?? {});
   const [logSources, setLogSources] = useState<string[]>(value.logSources ?? []);
+  const [activeHost, setActiveHost] = useState<string | null>(() => Object.keys(value.hostItems ?? {})[0] ?? null);
+  const [tab, setTab] = useState<"zabbix" | "log">("zabbix");
   const itemPool = itemPoolByType[asset.type];
   const logPool = logSourcePoolByType[asset.type];
+
   const selectedHosts = Object.keys(hostItems);
+  const totalItems = selectedHosts.reduce((n, h) => n + (hostItems[h]?.length ?? 0), 0);
 
   const toggleHost = (h: string) => {
     setHostItems((prev) => {
       const next = { ...prev };
       if (next[h]) delete next[h];
-      else next[h] = [...itemPool]; // 默认全选推荐项
+      else next[h] = [...itemPool];
       return next;
+    });
+    setActiveHost((cur) => {
+      if (hostItems[h] && cur === h) {
+        const remain = Object.keys(hostItems).filter((x) => x !== h);
+        return remain[0] ?? null;
+      }
+      return cur ?? h;
     });
   };
   const toggleItem = (h: string, it: string) => {
@@ -455,89 +466,132 @@ function ObservationEditor({
   };
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>编辑观测配置 · {asset.name}</DialogTitle>
-        <DialogDescription>
-          选择 Zabbix Host、观测项与日志源。阈值与观察窗口在 <span className="text-foreground">巡检配置</span> 中维护。
-        </DialogDescription>
-      </DialogHeader>
+    <div className="flex flex-col h-full">
+      <SheetHeader className="px-6 pt-6 pb-3 border-b">
+        <SheetTitle className="text-base">编辑观测配置 · {asset.name}</SheetTitle>
+        <p className="text-xs text-muted-foreground font-normal">
+          按 <span className="text-foreground">Zabbix 指标</span> 与 <span className="text-foreground">日志</span> 两类配置观测。阈值与观察窗口在「巡检配置」中维护。
+        </p>
+      </SheetHeader>
 
-      <div className="space-y-5 py-2">
-        <section>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold">Zabbix Host（可多选）</h4>
-            <span className="text-xs text-muted-foreground">已选 {selectedHosts.length} 个</span>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {zabbixHostPool.map((h) => {
-              const checked = !!hostItems[h];
-              return (
-                <label key={h} className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs cursor-pointer ${checked ? "border-primary bg-primary-soft" : "hover:bg-muted/40"}`}>
-                  <Checkbox checked={checked} onCheckedChange={() => toggleHost(h)} />
-                  <span className="font-mono">{h}</span>
-                </label>
-              );
-            })}
-          </div>
-        </section>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col">
+        <div className="px-6 pt-4">
+          <TabsList>
+            <TabsTrigger value="zabbix" className="gap-1.5">
+              <Activity className="h-3.5 w-3.5" />Zabbix 指标
+              <span className="text-[11px] text-muted-foreground ml-1">{selectedHosts.length} Host · {totalItems} 项</span>
+            </TabsTrigger>
+            <TabsTrigger value="log" className="gap-1.5">
+              <FileText className="h-3.5 w-3.5" />日志
+              <span className="text-[11px] text-muted-foreground ml-1">{logSources.length} 源</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        {selectedHosts.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-semibold flex items-center gap-1.5"><Activity className="h-4 w-4 text-primary" />观测项（每个 Host 独立多选）</h4>
-              <span className="text-xs text-muted-foreground">推荐：{itemPool.join("、")}</span>
-            </div>
-            <div className="space-y-2">
-              {selectedHosts.map((h) => (
-                <div key={h} className="rounded-md border p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-mono text-xs text-primary">{h}</span>
-                    <span className="text-[11px] text-muted-foreground">已选 {hostItems[h]?.length ?? 0} / {itemPool.length}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+        {/* Zabbix：级联多选（左 Host 列，右 观测项） */}
+        {tab === "zabbix" && (
+          <div className="flex-1 px-6 pt-4 pb-2">
+            <div className="rounded-lg border overflow-hidden grid grid-cols-[220px_1fr] min-h-[380px]">
+              {/* 左：Host 列 */}
+              <div className="border-r bg-muted/20">
+                <div className="px-3 py-2 text-[11px] text-muted-foreground border-b bg-background/60">
+                  Zabbix Host（{selectedHosts.length} / {zabbixHostPool.length}）
+                </div>
+                <div className="max-h-[420px] overflow-y-auto">
+                  {zabbixHostPool.map((h) => {
+                    const checked = !!hostItems[h];
+                    const active = activeHost === h;
+                    return (
+                      <div
+                        key={h}
+                        onClick={() => checked && setActiveHost(h)}
+                        className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer border-l-2 ${
+                          active ? "border-primary bg-primary-soft/60" : "border-transparent hover:bg-muted/50"
+                        }`}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => toggleHost(h)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="font-mono flex-1 truncate">{h}</span>
+                        {checked && <span className="text-[10px] text-muted-foreground">{hostItems[h]?.length ?? 0}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 右：观测项 */}
+              <div>
+                <div className="px-3 py-2 text-[11px] text-muted-foreground border-b bg-background/60 flex items-center justify-between">
+                  <span>观测项{activeHost ? ` · ${activeHost}` : ""}</span>
+                  <span>推荐：{itemPool.join("、")}</span>
+                </div>
+                {activeHost && hostItems[activeHost] ? (
+                  <div className="p-3 space-y-1">
                     {itemPool.map((it) => {
-                      const checked = hostItems[h]?.includes(it);
+                      const checked = hostItems[activeHost]?.includes(it);
                       return (
-                        <label key={it} className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs cursor-pointer ${checked ? "border-primary bg-primary-soft" : "hover:bg-muted/40"}`}>
-                          <Checkbox checked={checked} onCheckedChange={() => toggleItem(h, it)} />
+                        <label
+                          key={it}
+                          className={`flex items-center gap-2 px-2.5 py-2 rounded-md text-xs cursor-pointer ${
+                            checked ? "bg-primary-soft/60" : "hover:bg-muted/40"
+                          }`}
+                        >
+                          <Checkbox checked={checked} onCheckedChange={() => toggleItem(activeHost, it)} />
                           {it}
                         </label>
                       );
                     })}
                   </div>
-                </div>
-              ))}
+                ) : (
+                  <div className="h-full flex items-center justify-center text-xs text-muted-foreground p-6">
+                    请在左侧勾选 Zabbix Host，再选择其观测项
+                  </div>
+                )}
+              </div>
             </div>
-          </section>
+          </div>
         )}
 
-        <section>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold flex items-center gap-1.5"><FileText className="h-4 w-4 text-info" />日志源（可多选）</h4>
-            <span className="text-xs text-muted-foreground">已选 {logSources.length} 个</span>
+        {/* 日志源 */}
+        {tab === "log" && (
+          <div className="flex-1 px-6 pt-4 pb-2">
+            <div className="rounded-lg border p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs text-muted-foreground">日志源（可多选，推荐：{logPool.join("、")}）</span>
+                <span className="text-xs text-muted-foreground">已选 {logSources.length}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {logPool.map((s) => {
+                  const checked = logSources.includes(s);
+                  return (
+                    <label
+                      key={s}
+                      className={`flex items-center gap-2 rounded-md border px-3 py-2.5 text-xs cursor-pointer ${
+                        checked ? "border-primary bg-primary-soft" : "hover:bg-muted/40"
+                      }`}
+                    >
+                      <Checkbox checked={checked} onCheckedChange={() => toggleLog(s)} />
+                      <span className="font-mono">{s}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {logPool.map((s) => {
-              const checked = logSources.includes(s);
-              return (
-                <label key={s} className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs cursor-pointer ${checked ? "border-primary bg-primary-soft" : "hover:bg-muted/40"}`}>
-                  <Checkbox checked={checked} onCheckedChange={() => toggleLog(s)} />
-                  <span className="font-mono">{s}</span>
-                </label>
-              );
-            })}
-          </div>
-        </section>
-      </div>
+        )}
+      </Tabs>
 
-      <DialogFooter>
-        <Button variant="outline" onClick={onCancel}>取消</Button>
-        <Button onClick={() => onSave({ hostItems, logSources })}>保存配置</Button>
-      </DialogFooter>
-    </>
+      <div className="border-t px-6 py-3 flex justify-end gap-2 bg-background">
+        <Button variant="outline" size="sm" onClick={onCancel}>取消</Button>
+        <Button size="sm" onClick={() => onSave({ hostItems, logSources })}>保存配置</Button>
+      </div>
+    </div>
   );
 }
+
 
 function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: EditableConfig; onEdit: () => void; onEditObs: () => void }) {
   const meta = typeMeta[asset.type];
