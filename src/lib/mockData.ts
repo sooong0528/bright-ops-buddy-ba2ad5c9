@@ -280,12 +280,41 @@ export const hosts: Host[] = [
 ];
 
 export const inspectionTasks: InspectionTask[] = [
-  { id: "t1", name: "全量主机日常巡检", type: "日常巡检", schedule: "每日 08:00", lastRun: "2025-04-22 08:00", status: "已完成", normal: 6, attention: 2, abnormal: 2, description: "对全部业务主机进行 CPU/内存/磁盘/Ping 四项基础指标巡检。", targets: ["全部主机组"], metrics: ["CPU", "内存", "磁盘", "Ping"], enabled: true, owner: "李管理", createdAt: "2025-01-10" },
-  { id: "t2", name: "数据库专项巡检", type: "日常巡检", schedule: "每日 09:00", lastRun: "2025-04-22 09:00", status: "已完成", normal: 1, attention: 1, abnormal: 0, description: "针对 MySQL 主从节点的资源使用情况进行专项核查。", targets: ["数据库"], metrics: ["CPU", "内存", "磁盘"], enabled: true, owner: "张运维", createdAt: "2025-02-03" },
-  { id: "t3", name: "周度容量趋势巡检", type: "周巡检", schedule: "每周一 07:30", lastRun: "2025-04-21 07:30", status: "已完成", normal: 5, attention: 3, abnormal: 0, description: "汇总一周磁盘容量与内存使用趋势，输出关注主机清单。", targets: ["全部主机组"], metrics: ["磁盘", "内存"], enabled: true, owner: "李管理", createdAt: "2025-01-15" },
-  { id: "t4", name: "网络连通性巡检", type: "日常巡检", schedule: "每 30 分钟", lastRun: "2025-04-22 10:30", status: "运行中", normal: 7, attention: 0, abnormal: 1, description: "高频次 ICMP 探测，及时发现节点失联。", targets: ["全部主机组"], metrics: ["Ping"], enabled: true, owner: "王巡检", createdAt: "2025-03-01" },
-  { id: "t5", name: "手动 — 应急核查", type: "手动巡检", schedule: "—", lastRun: "2025-04-22 10:12", status: "已完成", normal: 4, attention: 1, abnormal: 1, description: "应急场景下针对指定主机的临时核查任务。", targets: ["app-svc-01", "mq-01"], metrics: ["CPU", "内存", "Ping"], enabled: true, owner: "张运维", createdAt: "2025-04-22" },
+  { id: "t1", name: "全量主机日常巡检", type: "日常巡检", schedule: "每日 08:00", lastRun: "2025-04-22 08:00", status: "已完成", normal: 6, attention: 2, abnormal: 2, description: "对全部业务主机进行 CPU/内存/磁盘/Ping 四项基础指标巡检。",
+    assetSelections: [
+      { assetId: "as1", metrics: ["CPU", "内存", "磁盘", "Ping"] },
+      { assetId: "as2", metrics: ["CPU", "内存", "磁盘", "Ping"] },
+      { assetId: "as3", metrics: ["CPU", "内存", "磁盘", "Ping"] },
+    ],
+    targets: ["app-svc-01", "app-web-01", "mq-01"], metrics: ["CPU", "内存", "磁盘", "Ping"], enabled: true, owner: "李管理", createdAt: "2025-01-10" },
+  { id: "t2", name: "数据库专项巡检", type: "日常巡检", schedule: "每日 09:00", lastRun: "2025-04-22 09:00", status: "已完成", normal: 1, attention: 1, abnormal: 0, description: "针对 MySQL 主从节点的资源使用情况进行专项核查。",
+    assetSelections: [
+      { assetId: "as4", metrics: ["连接数", "慢查询", "锁等待", "数据库日志"] },
+      { assetId: "as5", metrics: ["连接数", "慢查询"] },
+    ],
+    targets: ["db-master-01 (核心库主)", "db-slave-01 (核心库从)"], metrics: ["连接数", "慢查询", "锁等待", "数据库日志"], enabled: true, owner: "张运维", createdAt: "2025-02-03" },
+  { id: "t3", name: "周度容量趋势巡检", type: "周巡检", schedule: "每周一 07:30", lastRun: "2025-04-21 07:30", status: "已完成", normal: 5, attention: 3, abnormal: 0, description: "汇总一周磁盘容量与内存使用趋势，输出关注主机清单。",
+    assetSelections: [
+      { assetId: "as1", metrics: ["内存", "磁盘"] },
+      { assetId: "as2", metrics: ["内存", "磁盘"] },
+      { assetId: "as3", metrics: ["内存", "磁盘"] },
+    ],
+    targets: ["app-svc-01", "app-web-01", "mq-01"], metrics: ["内存", "磁盘"], enabled: true, owner: "李管理", createdAt: "2025-01-15" },
+  { id: "t4", name: "网络连通性巡检", type: "日常巡检", schedule: "每 30 分钟", lastRun: "2025-04-22 10:30", status: "运行中", normal: 7, attention: 0, abnormal: 1, description: "高频次 ICMP 探测，及时发现节点失联。",
+    assetSelections: [
+      { assetId: "as1", metrics: ["Ping"] },
+      { assetId: "as2", metrics: ["Ping"] },
+      { assetId: "as3", metrics: ["Ping"] },
+    ],
+    targets: ["app-svc-01", "app-web-01", "mq-01"], metrics: ["Ping"], enabled: true, owner: "王巡检", createdAt: "2025-03-01" },
+  { id: "t5", name: "手动 — 应急核查", type: "手动巡检", schedule: "—", lastRun: "2025-04-22 10:12", status: "已完成", normal: 4, attention: 1, abnormal: 1, description: "应急场景下针对指定主机的临时核查任务。",
+    assetSelections: [
+      { assetId: "as1", metrics: ["CPU", "内存", "Ping"] },
+      { assetId: "as3", metrics: ["CPU", "内存", "Ping"] },
+    ],
+    targets: ["app-svc-01", "mq-01"], metrics: ["CPU", "内存", "Ping"], enabled: true, owner: "张运维", createdAt: "2025-04-22" },
 ];
+
 
 export const inspectionRuns: InspectionRun[] = [
   { id: "run-1024", taskId: "t1", startTime: "2025-04-22 08:00:02", endTime: "2025-04-22 08:01:14", duration: "1m 12s", status: "已完成", trigger: "定时", operator: "系统", normal: 6, attention: 2, abnormal: 2, summary: "app-svc-01 CPU 92%、mq-01 ICMP 失败，已生成异常摘要。" },
