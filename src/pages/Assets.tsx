@@ -374,9 +374,9 @@ export default function Assets() {
         </DialogContent>
       </Dialog>
 
-      {/* 观测配置编辑 Dialog */}
-      <Dialog open={!!obsEditAsset} onOpenChange={(o) => !o && setObsEditId(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+      {/* 观测配置编辑 Sheet */}
+      <Sheet open={!!obsEditAsset} onOpenChange={(o) => !o && setObsEditId(null)}>
+        <SheetContent className="w-full sm:max-w-3xl overflow-y-auto p-0">
           {obsEditAsset && (
             <ObservationEditor
               asset={obsEditAsset}
@@ -385,8 +385,9 @@ export default function Assets() {
               onSave={(cfg) => saveObsConfig(obsEditAsset.id, cfg)}
             />
           )}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
+
 
       {/* 删除确认 */}
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
