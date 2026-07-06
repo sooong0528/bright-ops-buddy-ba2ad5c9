@@ -30,8 +30,12 @@ export interface InspectionTask {
   attention: number;
   abnormal: number;
   description?: string;
+  /** 资源 → 该资源上要巡检的指标（明确关联关系） */
+  assetSelections: { assetId: string; metrics: string[] }[];
+  /** 兼容旧字段：资源名称的扁平列表 */
   targets: string[];
-  metrics: ("CPU" | "内存" | "磁盘" | "Ping")[];
+  /** 兼容旧字段：所有指标的扁平去重列表 */
+  metrics: string[];
   enabled: boolean;
   owner: string;
   createdAt: string;
