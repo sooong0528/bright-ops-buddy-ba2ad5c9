@@ -360,16 +360,57 @@ function TaskEditorDialog({
     return {
       id: "", name: "", type: "日常巡检", schedule: "每日 08:00",
       lastRun: "—", status: "待运行", normal: 0, attention: 0, abnormal: 0,
-      description: "", targets: ["全部主机组"], metrics: ["CPU", "内存", "磁盘", "Ping"],
+      description: "", assetSelections: [], targets: [], metrics: [],
       enabled: true, owner: "李管理", createdAt: new Date().toISOString().slice(0, 10),
     };
   }
 
-  function toggleMetric(m: Metric) {
-    setForm((f) => ({ ...f, metrics: f.metrics.includes(m) ? f.metrics.filter((x) => x !== m) : [...f.metrics, m] }));
+  // 已选资源 & 每个资源上勾选的指标（关联关系明确存储）
+  const selectedAssetIds = form.assetSelections.map((s) => s.assetId);
+
+  function toggleAsset(a: Asset) {
+    setForm((f) => {
+      const exists = f.assetSelections.find((s) => s.assetId === a.id);
+      let next;
+      if (exists) {
+        next = f.assetSelections.filter((s) => s.assetId !== a.id);
+      } else {
+        // 默认勾选该资源类型下的全部推荐指标
+        next = [...f.assetSelections, { assetId: a.id, metrics: [...metricPoolByType[a.type]] }];
+      }
+      return syncFlat({ ...f, assetSelections: next });
+    });
   }
-  function toggleTarget(t: string) {
-    setForm((f) => ({ ...f, targets: f.targets.includes(t) ? f.targets.filter((x) => x !== t) : [...f.targets, t] }));
+
+  function toggleAssetMetric(assetId: string, metric: string) {
+    setForm((f) => {
+      const next = f.assetSelections.map((s) => {
+        if (s.assetId !== assetId) return s;
+        const has = s.metrics.includes(metric);
+        return { ...s, metrics: has ? s.metrics.filter((m) => m !== metric) : [...s.metrics, metric] };
+      });
+      return syncFlat({ ...f, assetSelections: next });
+    });
+  }
+
+  function setAssetMetricsAll(assetId: string, checked: boolean) {
+    setForm((f) => {
+      const next = f.assetSelections.map((s) => {
+        if (s.assetId !== assetId) return s;
+        const a = assets.find((x) => x.id === assetId);
+        return { ...s, metrics: checked && a ? [...metricPoolByType[a.type]] : [] };
+      });
+      return syncFlat({ ...f, assetSelections: next });
+    });
+  }
+
+  // 同步兼容字段：targets = 资源名称，metrics = 指标去重
+  function syncFlat(f: InspectionTask): InspectionTask {
+    const targets = f.assetSelections
+      .map((s) => assets.find((a) => a.id === s.assetId)?.name)
+      .filter(Boolean) as string[];
+    const metrics = Array.from(new Set(f.assetSelections.flatMap((s) => s.metrics)));
+    return { ...f, targets, metrics };
   }
 
   async function handleNlGenerate() {
@@ -381,13 +422,11 @@ function TaskEditorDialog({
       setForm((f) => ({
         ...f,
         name: r.name || f.name, type: (r.type as any) || f.type, schedule: r.schedule || f.schedule,
-        metrics: r.metrics?.length ? r.metrics : f.metrics,
-        targets: r.targets?.length ? r.targets : f.targets,
         owner: r.owner || f.owner, description: r.description || f.description,
       }));
       setNlReasoning(r.reasoning || "");
       setMergeResult(null);
-      toast.success("已根据描述填充任务字段");
+      toast.success("已根据描述填充任务基础字段，请在下方选择资源与指标");
       setNlOpen(false);
     } catch (e: any) {
       toast.error(e?.message || "AI 生成失败");
@@ -395,8 +434,8 @@ function TaskEditorDialog({
   }
 
   async function handleMergeCheck() {
-    if (!form.name.trim() || form.metrics.length === 0 || form.targets.length === 0) {
-      toast.error("请先完善任务名称、指标与目标，再请 AI 评估");
+    if (!form.name.trim() || form.assetSelections.length === 0) {
+      toast.error("请先完善任务名称并至少选择一个资源，再请 AI 评估");
       return;
     }
     setMergeLoading(true); setMergeResult(null);
@@ -417,16 +456,21 @@ function TaskEditorDialog({
     const s = mergeResult.suggestedTask;
     setForm((f) => ({
       ...f, name: s.name, type: s.type as any, schedule: s.schedule,
-      metrics: s.metrics, targets: s.targets, description: s.description,
+      description: s.description,
     }));
-    toast.success("已应用 AI 建议");
+    toast.success("已应用 AI 建议（资源与指标请手工确认）");
     setMergeResult(null);
   }
 
   function submit() {
     if (!form.name.trim()) { toast.error("请填写任务名称"); return; }
-    if (form.metrics.length === 0) { toast.error("请至少选择一项巡检指标"); return; }
-    if (form.targets.length === 0) { toast.error("请至少选择一个巡检目标"); return; }
+    if (form.assetSelections.length === 0) { toast.error("请至少选择一个巡检资源"); return; }
+    const emptyOne = form.assetSelections.find((s) => s.metrics.length === 0);
+    if (emptyOne) {
+      const a = assets.find((x) => x.id === emptyOne.assetId);
+      toast.error(`请为「${a?.name ?? emptyOne.assetId}」至少选择一项指标`);
+      return;
+    }
     onSave(form);
   }
 
