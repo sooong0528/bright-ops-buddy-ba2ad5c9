@@ -82,6 +82,9 @@ import { JudgmentRulesPanel } from "@/components/JudgmentRulesPanel";
 import {
   inspectionTasks as initialTasks,
   inspectionRuns as initialRuns,
+  assets,
+  type Asset,
+  type AssetType,
   type InspectionTask,
   type InspectionRun,
 } from "@/lib/mockData";
@@ -90,14 +93,14 @@ import { supabase } from "@/integrations/supabase/client";
 
 type ParsedTask = {
   name: string; type: string; schedule: string;
-  metrics: Metric[]; targets: string[]; owner: string;
+  metrics: string[]; targets: string[]; owner: string;
   description: string; reasoning: string;
 };
 type MergeSuggestion = {
   verdict: "merge" | "adjust" | "keep";
   summary: string;
   mergeIntoTaskId: string;
-  suggestedTask: { name: string; type: string; schedule: string; metrics: Metric[]; targets: string[]; description: string };
+  suggestedTask: { name: string; type: string; schedule: string; metrics: string[]; targets: string[]; description: string };
   reasoning: string;
   risks: string[];
 };
@@ -112,9 +115,13 @@ async function callInspectionAi(payload: Record<string, unknown>) {
   return (data as any).result;
 }
 
-type Metric = "CPU" | "内存" | "磁盘" | "Ping";
-const METRICS: Metric[] = ["CPU", "内存", "磁盘", "Ping"];
-const TARGET_GROUPS = ["全部主机组", "Web 接入层", "应用服务层", "数据库", "缓存层", "消息中间件"];
+// 每类资源的可选指标池（与 资产管理 观测项保持一致）
+const metricPoolByType: Record<AssetType, string[]> = {
+  主机: ["CPU", "内存", "磁盘", "Ping"],
+  应用服务: ["端口", "HTTP 健康检查", "应用错误日志"],
+  数据库: ["连接数", "慢查询", "锁等待", "数据库日志"],
+  中间件: ["存活状态", "连接数", "队列堆积", "错误日志"],
+};
 
 export default function InspectionAdmin() {
   const navigate = useNavigate();
