@@ -82,6 +82,9 @@ import { JudgmentRulesPanel } from "@/components/JudgmentRulesPanel";
 import {
   inspectionTasks as initialTasks,
   inspectionRuns as initialRuns,
+  assets,
+  type Asset,
+  type AssetType,
   type InspectionTask,
   type InspectionRun,
 } from "@/lib/mockData";
@@ -90,14 +93,14 @@ import { supabase } from "@/integrations/supabase/client";
 
 type ParsedTask = {
   name: string; type: string; schedule: string;
-  metrics: Metric[]; targets: string[]; owner: string;
+  metrics: string[]; targets: string[]; owner: string;
   description: string; reasoning: string;
 };
 type MergeSuggestion = {
   verdict: "merge" | "adjust" | "keep";
   summary: string;
   mergeIntoTaskId: string;
-  suggestedTask: { name: string; type: string; schedule: string; metrics: Metric[]; targets: string[]; description: string };
+  suggestedTask: { name: string; type: string; schedule: string; metrics: string[]; targets: string[]; description: string };
   reasoning: string;
   risks: string[];
 };
@@ -112,9 +115,13 @@ async function callInspectionAi(payload: Record<string, unknown>) {
   return (data as any).result;
 }
 
-type Metric = "CPU" | "内存" | "磁盘" | "Ping";
-const METRICS: Metric[] = ["CPU", "内存", "磁盘", "Ping"];
-const TARGET_GROUPS = ["全部主机组", "Web 接入层", "应用服务层", "数据库", "缓存层", "消息中间件"];
+// 每类资源的可选指标池（与 资产管理 观测项保持一致）
+const metricPoolByType: Record<AssetType, string[]> = {
+  主机: ["CPU", "内存", "磁盘", "Ping"],
+  应用服务: ["端口", "HTTP 健康检查", "应用错误日志"],
+  数据库: ["连接数", "慢查询", "锁等待", "数据库日志"],
+  中间件: ["存活状态", "连接数", "队列堆积", "错误日志"],
+};
 
 export default function InspectionAdmin() {
   const navigate = useNavigate();
@@ -353,16 +360,57 @@ function TaskEditorDialog({
     return {
       id: "", name: "", type: "日常巡检", schedule: "每日 08:00",
       lastRun: "—", status: "待运行", normal: 0, attention: 0, abnormal: 0,
-      description: "", targets: ["全部主机组"], metrics: ["CPU", "内存", "磁盘", "Ping"],
+      description: "", assetSelections: [], targets: [], metrics: [],
       enabled: true, owner: "李管理", createdAt: new Date().toISOString().slice(0, 10),
     };
   }
 
-  function toggleMetric(m: Metric) {
-    setForm((f) => ({ ...f, metrics: f.metrics.includes(m) ? f.metrics.filter((x) => x !== m) : [...f.metrics, m] }));
+  // 已选资源 & 每个资源上勾选的指标（关联关系明确存储）
+  const selectedAssetIds = form.assetSelections.map((s) => s.assetId);
+
+  function toggleAsset(a: Asset) {
+    setForm((f) => {
+      const exists = f.assetSelections.find((s) => s.assetId === a.id);
+      let next;
+      if (exists) {
+        next = f.assetSelections.filter((s) => s.assetId !== a.id);
+      } else {
+        // 默认勾选该资源类型下的全部推荐指标
+        next = [...f.assetSelections, { assetId: a.id, metrics: [...metricPoolByType[a.type]] }];
+      }
+      return syncFlat({ ...f, assetSelections: next });
+    });
   }
-  function toggleTarget(t: string) {
-    setForm((f) => ({ ...f, targets: f.targets.includes(t) ? f.targets.filter((x) => x !== t) : [...f.targets, t] }));
+
+  function toggleAssetMetric(assetId: string, metric: string) {
+    setForm((f) => {
+      const next = f.assetSelections.map((s) => {
+        if (s.assetId !== assetId) return s;
+        const has = s.metrics.includes(metric);
+        return { ...s, metrics: has ? s.metrics.filter((m) => m !== metric) : [...s.metrics, metric] };
+      });
+      return syncFlat({ ...f, assetSelections: next });
+    });
+  }
+
+  function setAssetMetricsAll(assetId: string, checked: boolean) {
+    setForm((f) => {
+      const next = f.assetSelections.map((s) => {
+        if (s.assetId !== assetId) return s;
+        const a = assets.find((x) => x.id === assetId);
+        return { ...s, metrics: checked && a ? [...metricPoolByType[a.type]] : [] };
+      });
+      return syncFlat({ ...f, assetSelections: next });
+    });
+  }
+
+  // 同步兼容字段：targets = 资源名称，metrics = 指标去重
+  function syncFlat(f: InspectionTask): InspectionTask {
+    const targets = f.assetSelections
+      .map((s) => assets.find((a) => a.id === s.assetId)?.name)
+      .filter(Boolean) as string[];
+    const metrics = Array.from(new Set(f.assetSelections.flatMap((s) => s.metrics)));
+    return { ...f, targets, metrics };
   }
 
   async function handleNlGenerate() {
@@ -374,13 +422,11 @@ function TaskEditorDialog({
       setForm((f) => ({
         ...f,
         name: r.name || f.name, type: (r.type as any) || f.type, schedule: r.schedule || f.schedule,
-        metrics: r.metrics?.length ? r.metrics : f.metrics,
-        targets: r.targets?.length ? r.targets : f.targets,
         owner: r.owner || f.owner, description: r.description || f.description,
       }));
       setNlReasoning(r.reasoning || "");
       setMergeResult(null);
-      toast.success("已根据描述填充任务字段");
+      toast.success("已根据描述填充任务基础字段，请在下方选择资源与指标");
       setNlOpen(false);
     } catch (e: any) {
       toast.error(e?.message || "AI 生成失败");
@@ -388,8 +434,8 @@ function TaskEditorDialog({
   }
 
   async function handleMergeCheck() {
-    if (!form.name.trim() || form.metrics.length === 0 || form.targets.length === 0) {
-      toast.error("请先完善任务名称、指标与目标，再请 AI 评估");
+    if (!form.name.trim() || form.assetSelections.length === 0) {
+      toast.error("请先完善任务名称并至少选择一个资源，再请 AI 评估");
       return;
     }
     setMergeLoading(true); setMergeResult(null);
@@ -410,16 +456,21 @@ function TaskEditorDialog({
     const s = mergeResult.suggestedTask;
     setForm((f) => ({
       ...f, name: s.name, type: s.type as any, schedule: s.schedule,
-      metrics: s.metrics, targets: s.targets, description: s.description,
+      description: s.description,
     }));
-    toast.success("已应用 AI 建议");
+    toast.success("已应用 AI 建议（资源与指标请手工确认）");
     setMergeResult(null);
   }
 
   function submit() {
     if (!form.name.trim()) { toast.error("请填写任务名称"); return; }
-    if (form.metrics.length === 0) { toast.error("请至少选择一项巡检指标"); return; }
-    if (form.targets.length === 0) { toast.error("请至少选择一个巡检目标"); return; }
+    if (form.assetSelections.length === 0) { toast.error("请至少选择一个巡检资源"); return; }
+    const emptyOne = form.assetSelections.find((s) => s.metrics.length === 0);
+    if (emptyOne) {
+      const a = assets.find((x) => x.id === emptyOne.assetId);
+      toast.error(`请为「${a?.name ?? emptyOne.assetId}」至少选择一项指标`);
+      return;
+    }
     onSave(form);
   }
 
@@ -427,7 +478,7 @@ function TaskEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "编辑巡检任务" : "新建巡检任务"}</DialogTitle>
           <DialogDescription>
@@ -501,30 +552,92 @@ function TaskEditorDialog({
           </div>
 
           <div className="col-span-2">
-            <Label className="text-sm">巡检指标</Label>
-            <div className="mt-2 grid grid-cols-4 gap-2">
-              {METRICS.map((m) => (
-                <label key={m} className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm ${
-                  form.metrics.includes(m) ? "border-primary bg-primary-soft/40" : "bg-card hover:bg-secondary/50"
-                }`}>
-                  <Checkbox checked={form.metrics.includes(m)} onCheckedChange={() => toggleMetric(m)} />
-                  {m}
-                </label>
-              ))}
+            <div className="flex items-baseline justify-between">
+              <Label className="text-sm">巡检资源与指标</Label>
+              <span className="text-xs text-muted-foreground">
+                已选 {form.assetSelections.length} 个资源 · 共 {form.metrics.length} 项指标
+              </span>
             </div>
-          </div>
-
-          <div className="col-span-2">
-            <Label className="text-sm">巡检目标</Label>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {TARGET_GROUPS.map((g) => (
-                <label key={g} className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm ${
-                  form.targets.includes(g) ? "border-primary bg-primary-soft/40" : "bg-card hover:bg-secondary/50"
-                }`}>
-                  <Checkbox checked={form.targets.includes(g)} onCheckedChange={() => toggleTarget(g)} />
-                  {g}
-                </label>
-              ))}
+            <p className="text-xs text-muted-foreground mt-1">
+              先选择资源，再为每个资源勾选要巡检的指标；关联关系随任务一起保存。
+            </p>
+            <div className="mt-2 grid grid-cols-[240px_1fr] gap-3 rounded-md border bg-card">
+              {/* 资源列表 */}
+              <div className="border-r max-h-[360px] overflow-y-auto">
+                {(() => {
+                  const grouped = assets.reduce<Record<AssetType, Asset[]>>((acc, a) => {
+                    (acc[a.type] ||= []).push(a);
+                    return acc;
+                  }, {} as Record<AssetType, Asset[]>);
+                  return (Object.keys(grouped) as AssetType[]).map((type) => (
+                    <div key={type}>
+                      <div className="sticky top-0 bg-muted/50 px-2.5 py-1 text-[11px] text-muted-foreground border-b">
+                        {type}
+                      </div>
+                      {grouped[type].map((a) => {
+                        const sel = selectedAssetIds.includes(a.id);
+                        return (
+                          <label key={a.id} className={`flex items-start gap-2 px-2.5 py-2 text-sm cursor-pointer border-b last:border-b-0 hover:bg-secondary/50 ${sel ? "bg-primary-soft/40" : ""}`}>
+                            <Checkbox className="mt-0.5" checked={sel} onCheckedChange={() => toggleAsset(a)} />
+                            <div className="min-w-0">
+                              <div className="truncate font-medium">{a.name}</div>
+                              <div className="text-[11px] text-muted-foreground truncate">{a.businessSystem} · {a.ip}</div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ));
+                })()}
+              </div>
+              {/* 指标区（按已选资源分组） */}
+              <div className="max-h-[360px] overflow-y-auto p-3 space-y-3">
+                {form.assetSelections.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-16">
+                    请先在左侧选择巡检资源
+                  </div>
+                ) : (
+                  form.assetSelections.map((s) => {
+                    const a = assets.find((x) => x.id === s.assetId);
+                    if (!a) return null;
+                    const pool = metricPoolByType[a.type];
+                    const allChecked = s.metrics.length === pool.length;
+                    return (
+                      <div key={s.assetId} className="rounded-md border bg-background">
+                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium truncate">{a.name}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">{a.type} · {pool.length} 项可选 · 已选 {s.metrics.length}</div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                              onClick={() => setAssetMetricsAll(a.id, !allChecked)}>
+                              {allChecked ? "全不选" : "全选"}
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                              onClick={() => toggleAsset(a)}>
+                              移除
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="p-2 grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                          {pool.map((m) => {
+                            const checked = s.metrics.includes(m);
+                            return (
+                              <label key={m} className={`flex items-center gap-2 rounded border px-2 py-1.5 cursor-pointer text-xs ${
+                                checked ? "border-primary bg-primary-soft/40" : "bg-card hover:bg-secondary/50"
+                              }`}>
+                                <Checkbox checked={checked} onCheckedChange={() => toggleAssetMetric(a.id, m)} />
+                                {m}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
 
@@ -674,11 +787,37 @@ function TaskDetailSheet({
               <InfoTile icon={Calendar} label="创建时间" value={task.createdAt} />
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="text-xs text-muted-foreground">指标：</span>
-              {task.metrics.map((m) => <span key={m} className="text-xs rounded bg-secondary px-2 py-0.5">{m}</span>)}
-              <span className="text-xs text-muted-foreground ml-3">目标：</span>
-              {task.targets.map((t) => <span key={t} className="text-xs rounded bg-secondary px-2 py-0.5">{t}</span>)}
+            <div className="mt-5">
+              <div className="text-xs text-muted-foreground mb-2">巡检资源与指标（{task.assetSelections.length} 个资源 · {task.metrics.length} 项指标）</div>
+              {task.assetSelections.length === 0 ? (
+                <div className="rounded-md border border-dashed py-4 text-center text-xs text-muted-foreground">
+                  未关联资源
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {task.assetSelections.map((s) => {
+                    const a = assets.find((x) => x.id === s.assetId);
+                    return (
+                      <div key={s.assetId} className="rounded-md border bg-card px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium truncate">{a?.name ?? s.assetId}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">
+                              {a ? `${a.type} · ${a.businessSystem} · ${a.ip}` : "已删除资源"}
+                            </div>
+                          </div>
+                          <span className="text-[11px] text-muted-foreground shrink-0">{s.metrics.length} 项</span>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {s.metrics.map((m) => (
+                            <span key={m} className="text-[11px] rounded bg-secondary px-1.5 py-0.5">{m}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="mt-5 grid grid-cols-3 gap-3">
