@@ -787,11 +787,37 @@ function TaskDetailSheet({
               <InfoTile icon={Calendar} label="创建时间" value={task.createdAt} />
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="text-xs text-muted-foreground">指标：</span>
-              {task.metrics.map((m) => <span key={m} className="text-xs rounded bg-secondary px-2 py-0.5">{m}</span>)}
-              <span className="text-xs text-muted-foreground ml-3">目标：</span>
-              {task.targets.map((t) => <span key={t} className="text-xs rounded bg-secondary px-2 py-0.5">{t}</span>)}
+            <div className="mt-5">
+              <div className="text-xs text-muted-foreground mb-2">巡检资源与指标（{task.assetSelections.length} 个资源 · {task.metrics.length} 项指标）</div>
+              {task.assetSelections.length === 0 ? (
+                <div className="rounded-md border border-dashed py-4 text-center text-xs text-muted-foreground">
+                  未关联资源
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {task.assetSelections.map((s) => {
+                    const a = assets.find((x) => x.id === s.assetId);
+                    return (
+                      <div key={s.assetId} className="rounded-md border bg-card px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium truncate">{a?.name ?? s.assetId}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">
+                              {a ? `${a.type} · ${a.businessSystem} · ${a.ip}` : "已删除资源"}
+                            </div>
+                          </div>
+                          <span className="text-[11px] text-muted-foreground shrink-0">{s.metrics.length} 项</span>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {s.metrics.map((m) => (
+                            <span key={m} className="text-[11px] rounded bg-secondary px-1.5 py-0.5">{m}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="mt-5 grid grid-cols-3 gap-3">
