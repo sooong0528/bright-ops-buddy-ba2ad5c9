@@ -10,7 +10,7 @@ const titleMap: Record<string, { title: string; sub: string }> = {
   "/": { title: "总览驾驶舱", sub: "平台运行态势与关键指标一览" },
   "/inspection": { title: "巡检中心", sub: "巡检状态、结果与异常追踪" },
   "/analysis": { title: "故障分析", sub: "面向异常与关注记录的辅助研判" },
-  "/inspection-admin": { title: "巡检配置管理", sub: "巡检任务配置与判定规则管理" },
+  "/inspection-admin": { title: "巡检配置", sub: "巡检任务配置与判定规则管理" },
   "/assistant": { title: "智能问答", sub: "知识库问答 · 数据查询 · 上下文追问" },
   "/reports": { title: "报告中心", sub: "巡检报告 / 故障分析报告 / 知识服务情况分析报告" },
   "/assets": { title: "资产管理", sub: "轻量资产档案与观测配置" },
