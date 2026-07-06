@@ -552,30 +552,92 @@ function TaskEditorDialog({
           </div>
 
           <div className="col-span-2">
-            <Label className="text-sm">巡检指标</Label>
-            <div className="mt-2 grid grid-cols-4 gap-2">
-              {METRICS.map((m) => (
-                <label key={m} className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm ${
-                  form.metrics.includes(m) ? "border-primary bg-primary-soft/40" : "bg-card hover:bg-secondary/50"
-                }`}>
-                  <Checkbox checked={form.metrics.includes(m)} onCheckedChange={() => toggleMetric(m)} />
-                  {m}
-                </label>
-              ))}
+            <div className="flex items-baseline justify-between">
+              <Label className="text-sm">巡检资源与指标</Label>
+              <span className="text-xs text-muted-foreground">
+                已选 {form.assetSelections.length} 个资源 · 共 {form.metrics.length} 项指标
+              </span>
             </div>
-          </div>
-
-          <div className="col-span-2">
-            <Label className="text-sm">巡检目标</Label>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {TARGET_GROUPS.map((g) => (
-                <label key={g} className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm ${
-                  form.targets.includes(g) ? "border-primary bg-primary-soft/40" : "bg-card hover:bg-secondary/50"
-                }`}>
-                  <Checkbox checked={form.targets.includes(g)} onCheckedChange={() => toggleTarget(g)} />
-                  {g}
-                </label>
-              ))}
+            <p className="text-xs text-muted-foreground mt-1">
+              先选择资源，再为每个资源勾选要巡检的指标；关联关系随任务一起保存。
+            </p>
+            <div className="mt-2 grid grid-cols-[240px_1fr] gap-3 rounded-md border bg-card">
+              {/* 资源列表 */}
+              <div className="border-r max-h-[360px] overflow-y-auto">
+                {(() => {
+                  const grouped = assets.reduce<Record<AssetType, Asset[]>>((acc, a) => {
+                    (acc[a.type] ||= []).push(a);
+                    return acc;
+                  }, {} as Record<AssetType, Asset[]>);
+                  return (Object.keys(grouped) as AssetType[]).map((type) => (
+                    <div key={type}>
+                      <div className="sticky top-0 bg-muted/50 px-2.5 py-1 text-[11px] text-muted-foreground border-b">
+                        {type}
+                      </div>
+                      {grouped[type].map((a) => {
+                        const sel = selectedAssetIds.includes(a.id);
+                        return (
+                          <label key={a.id} className={`flex items-start gap-2 px-2.5 py-2 text-sm cursor-pointer border-b last:border-b-0 hover:bg-secondary/50 ${sel ? "bg-primary-soft/40" : ""}`}>
+                            <Checkbox className="mt-0.5" checked={sel} onCheckedChange={() => toggleAsset(a)} />
+                            <div className="min-w-0">
+                              <div className="truncate font-medium">{a.name}</div>
+                              <div className="text-[11px] text-muted-foreground truncate">{a.businessSystem} · {a.ip}</div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ));
+                })()}
+              </div>
+              {/* 指标区（按已选资源分组） */}
+              <div className="max-h-[360px] overflow-y-auto p-3 space-y-3">
+                {form.assetSelections.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-16">
+                    请先在左侧选择巡检资源
+                  </div>
+                ) : (
+                  form.assetSelections.map((s) => {
+                    const a = assets.find((x) => x.id === s.assetId);
+                    if (!a) return null;
+                    const pool = metricPoolByType[a.type];
+                    const allChecked = s.metrics.length === pool.length;
+                    return (
+                      <div key={s.assetId} className="rounded-md border bg-background">
+                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium truncate">{a.name}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">{a.type} · {pool.length} 项可选 · 已选 {s.metrics.length}</div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                              onClick={() => setAssetMetricsAll(a.id, !allChecked)}>
+                              {allChecked ? "全不选" : "全选"}
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                              onClick={() => toggleAsset(a)}>
+                              移除
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="p-2 grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                          {pool.map((m) => {
+                            const checked = s.metrics.includes(m);
+                            return (
+                              <label key={m} className={`flex items-center gap-2 rounded border px-2 py-1.5 cursor-pointer text-xs ${
+                                checked ? "border-primary bg-primary-soft/40" : "bg-card hover:bg-secondary/50"
+                              }`}>
+                                <Checkbox checked={checked} onCheckedChange={() => toggleAssetMetric(a.id, m)} />
+                                {m}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
 
