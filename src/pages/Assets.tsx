@@ -13,6 +13,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 
 const typeMeta: Record<AssetType, { icon: any; color: string; bg: string }> = {
   主机: { icon: Server, color: "text-primary", bg: "bg-primary-soft" },
@@ -24,10 +26,49 @@ const typeMeta: Record<AssetType, { icon: any; color: string; bg: string }> = {
 const assetTypes: AssetType[] = ["主机", "数据库", "应用服务", "中间件"];
 const environments: Environment[] = ["生产", "预生产", "测试"];
 
-function computeObservationStatus(assetId: string): Asset["observationStatus"] {
-  const cfg = observationConfigs[assetId];
+/* ========= 观测配置可选池 ========= */
+const zabbixHostPool = [
+  "app-web-01", "app-web-02", "app-svc-01", "app-svc-02",
+  "db-master-01", "db-slave-01", "cache-01", "mq-01", "gateway-01",
+];
+
+// 每类资产的推荐观测项
+const itemPoolByType: Record<AssetType, string[]> = {
+  主机: ["CPU", "内存", "磁盘", "Ping"],
+  应用服务: ["端口", "HTTP 健康检查", "应用错误日志"],
+  数据库: ["连接数", "慢查询", "锁等待", "数据库日志"],
+  中间件: ["存活状态", "连接数", "队列堆积", "错误日志"],
+};
+
+// 每类资产的推荐日志源
+const logSourcePoolByType: Record<AssetType, string[]> = {
+  主机: ["es-system-log", "es-syslog"],
+  应用服务: ["es-app-log", "es-nginx-log", "es-error-log"],
+  数据库: ["es-mysql-log", "es-oracle-log", "es-pg-log"],
+  中间件: ["es-mq-log", "es-redis-log", "es-kafka-log"],
+};
+
+type EditableConfig = {
+  hostItems: Record<string, string[]>;   // host -> selected items
+  logSources: string[];
+};
+
+function initConfigs(): Record<string, EditableConfig> {
+  const init: Record<string, EditableConfig> = {};
+  Object.values(observationConfigs).forEach((c) => {
+    init[c.assetId] = {
+      hostItems: { [c.zabbixHost]: c.items.map((i) => i.name) },
+      logSources: c.logSources.map((l) => l.source),
+    };
+  });
+  return init;
+}
+
+function statusOf(cfg?: EditableConfig): Asset["observationStatus"] {
   if (!cfg) return "未配置";
-  const hasItems = (cfg.items?.length ?? 0) > 0;
+  const hosts = Object.keys(cfg.hostItems);
+  const itemCount = hosts.reduce((n, h) => n + (cfg.hostItems[h]?.length ?? 0), 0);
+  const hasItems = hosts.length > 0 && itemCount > 0;
   const hasLogs = (cfg.logSources?.length ?? 0) > 0;
   if (hasItems && hasLogs) return "已配置";
   if (hasItems || hasLogs) return "部分配置";
@@ -53,6 +94,7 @@ const emptyForm: FormState = {
 
 export default function Assets() {
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
+  const [configs, setConfigs] = useState<Record<string, EditableConfig>>(() => initConfigs());
   const [tab, setTab] = useState<"全部" | AssetType>("全部");
   const [keyword, setKeyword] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -60,6 +102,7 @@ export default function Assets() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [obsEditId, setObsEditId] = useState<string | null>(null);
 
   const filtered = useMemo(() => assets.filter((a) => {
     if (tab !== "全部" && a.type !== tab) return false;
@@ -68,6 +111,7 @@ export default function Assets() {
   }), [tab, keyword, assets]);
 
   const selected = openId ? assets.find((a) => a.id === openId) ?? null : null;
+  const obsEditAsset = obsEditId ? assets.find((a) => a.id === obsEditId) ?? null : null;
 
   const counts = useMemo(() => ({
     主机: assets.filter((a) => a.type === "主机").length,
@@ -108,9 +152,16 @@ export default function Assets() {
     if (!deleteId) return;
     const target = assets.find((a) => a.id === deleteId);
     setAssets((prev) => prev.filter((a) => a.id !== deleteId));
+    setConfigs((prev) => { const n = { ...prev }; delete n[deleteId]; return n; });
     if (openId === deleteId) setOpenId(null);
     setDeleteId(null);
     toast({ title: "已删除", description: target ? `${target.name} 已从资产列表移除` : undefined });
+  };
+
+  const saveObsConfig = (assetId: string, cfg: EditableConfig) => {
+    setConfigs((prev) => ({ ...prev, [assetId]: cfg }));
+    setObsEditId(null);
+    toast({ title: "观测配置已保存" });
   };
 
   return (
@@ -164,7 +215,6 @@ export default function Assets() {
               <TableHead>业务系统</TableHead>
               <TableHead>IP / 端口</TableHead>
               <TableHead>环境</TableHead>
-              
               <TableHead>责任人</TableHead>
               <TableHead>观测配置</TableHead>
               <TableHead className="text-right">操作</TableHead>
@@ -179,7 +229,7 @@ export default function Assets() {
             {filtered.map((a) => {
               const meta = typeMeta[a.type];
               const Icon = meta.icon;
-              const obsStatus = computeObservationStatus(a.id);
+              const obsStatus = statusOf(configs[a.id]);
               const obsTone = obsStatus === "已配置" ? "success" : obsStatus === "部分配置" ? "warning" : "muted";
               return (
                 <TableRow key={a.id} className="cursor-pointer hover:bg-muted/40" onClick={() => setOpenId(a.id)}>
@@ -196,7 +246,7 @@ export default function Assets() {
                   <TableCell className="text-sm text-muted-foreground">{a.owner}</TableCell>
                   <TableCell><StatusBadge tone={obsTone} dot>{obsStatus}</StatusBadge></TableCell>
                   <TableCell className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                    <Button size="sm" variant="ghost" onClick={() => setOpenId(a.id)}>
+                    <Button size="sm" variant="ghost" onClick={() => setObsEditId(a.id)}>
                       <Settings2 className="h-4 w-4 mr-1" />观测配置
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => openEdit(a)}>
@@ -216,7 +266,14 @@ export default function Assets() {
       {/* 详情 Sheet */}
       <Sheet open={!!selected} onOpenChange={(o) => !o && setOpenId(null)}>
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-          {selected && <AssetDetail asset={selected} onEdit={() => { setOpenId(null); openEdit(selected); }} />}
+          {selected && (
+            <AssetDetail
+              asset={selected}
+              cfg={configs[selected.id]}
+              onEdit={() => { setOpenId(null); openEdit(selected); }}
+              onEditObs={() => { setOpenId(null); setObsEditId(selected.id); }}
+            />
+          )}
         </SheetContent>
       </Sheet>
 
@@ -317,6 +374,20 @@ export default function Assets() {
         </DialogContent>
       </Dialog>
 
+      {/* 观测配置编辑 Dialog */}
+      <Dialog open={!!obsEditAsset} onOpenChange={(o) => !o && setObsEditId(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          {obsEditAsset && (
+            <ObservationEditor
+              asset={obsEditAsset}
+              value={configs[obsEditAsset.id] ?? { hostItems: {}, logSources: [] }}
+              onCancel={() => setObsEditId(null)}
+              onSave={(cfg) => saveObsConfig(obsEditAsset.id, cfg)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* 删除确认 */}
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
@@ -348,10 +419,130 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
-function AssetDetail({ asset, onEdit }: { asset: Asset; onEdit: () => void }) {
-  const cfg = observationConfigs[asset.id];
+/* ============ 观测配置编辑器 ============ */
+function ObservationEditor({
+  asset, value, onCancel, onSave,
+}: {
+  asset: Asset;
+  value: EditableConfig;
+  onCancel: () => void;
+  onSave: (cfg: EditableConfig) => void;
+}) {
+  const [hostItems, setHostItems] = useState<Record<string, string[]>>(value.hostItems ?? {});
+  const [logSources, setLogSources] = useState<string[]>(value.logSources ?? []);
+  const itemPool = itemPoolByType[asset.type];
+  const logPool = logSourcePoolByType[asset.type];
+  const selectedHosts = Object.keys(hostItems);
+
+  const toggleHost = (h: string) => {
+    setHostItems((prev) => {
+      const next = { ...prev };
+      if (next[h]) delete next[h];
+      else next[h] = [...itemPool]; // 默认全选推荐项
+      return next;
+    });
+  };
+  const toggleItem = (h: string, it: string) => {
+    setHostItems((prev) => {
+      const cur = prev[h] ?? [];
+      const has = cur.includes(it);
+      return { ...prev, [h]: has ? cur.filter((x) => x !== it) : [...cur, it] };
+    });
+  };
+  const toggleLog = (s: string) => {
+    setLogSources((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>编辑观测配置 · {asset.name}</DialogTitle>
+        <DialogDescription>
+          选择 Zabbix Host、观测项与日志源。阈值与观察窗口在 <span className="text-foreground">巡检配置</span> 中维护。
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-5 py-2">
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold">Zabbix Host（可多选）</h4>
+            <span className="text-xs text-muted-foreground">已选 {selectedHosts.length} 个</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {zabbixHostPool.map((h) => {
+              const checked = !!hostItems[h];
+              return (
+                <label key={h} className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs cursor-pointer ${checked ? "border-primary bg-primary-soft" : "hover:bg-muted/40"}`}>
+                  <Checkbox checked={checked} onCheckedChange={() => toggleHost(h)} />
+                  <span className="font-mono">{h}</span>
+                </label>
+              );
+            })}
+          </div>
+        </section>
+
+        {selectedHosts.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold flex items-center gap-1.5"><Activity className="h-4 w-4 text-primary" />观测项（每个 Host 独立多选）</h4>
+              <span className="text-xs text-muted-foreground">推荐：{itemPool.join("、")}</span>
+            </div>
+            <div className="space-y-2">
+              {selectedHosts.map((h) => (
+                <div key={h} className="rounded-md border p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-mono text-xs text-primary">{h}</span>
+                    <span className="text-[11px] text-muted-foreground">已选 {hostItems[h]?.length ?? 0} / {itemPool.length}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {itemPool.map((it) => {
+                      const checked = hostItems[h]?.includes(it);
+                      return (
+                        <label key={it} className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs cursor-pointer ${checked ? "border-primary bg-primary-soft" : "hover:bg-muted/40"}`}>
+                          <Checkbox checked={checked} onCheckedChange={() => toggleItem(h, it)} />
+                          {it}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold flex items-center gap-1.5"><FileText className="h-4 w-4 text-info" />日志源（可多选）</h4>
+            <span className="text-xs text-muted-foreground">已选 {logSources.length} 个</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {logPool.map((s) => {
+              const checked = logSources.includes(s);
+              return (
+                <label key={s} className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs cursor-pointer ${checked ? "border-primary bg-primary-soft" : "hover:bg-muted/40"}`}>
+                  <Checkbox checked={checked} onCheckedChange={() => toggleLog(s)} />
+                  <span className="font-mono">{s}</span>
+                </label>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel}>取消</Button>
+        <Button onClick={() => onSave({ hostItems, logSources })}>保存配置</Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: EditableConfig; onEdit: () => void; onEditObs: () => void }) {
   const meta = typeMeta[asset.type];
   const Icon = meta.icon;
+  const hosts = cfg ? Object.keys(cfg.hostItems) : [];
+  const logSources = cfg?.logSources ?? [];
 
   return (
     <>
@@ -372,7 +563,7 @@ function AssetDetail({ asset, onEdit }: { asset: Asset; onEdit: () => void }) {
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <Info label="业务系统" value={asset.businessSystem} />
             <Info label="环境" value={asset.environment} />
-            <Info label="观测配置" value={computeObservationStatus(asset.id)} />
+            <Info label="观测配置" value={statusOf(cfg)} />
             <Info label="状态" value={asset.status} />
             <Info label="IP / 端口" value={`${asset.ip}${asset.port ? ` : ${asset.port}` : ""}`} />
             <Info label="责任人" value={asset.owner} />
@@ -392,29 +583,21 @@ function AssetDetail({ asset, onEdit }: { asset: Asset; onEdit: () => void }) {
         </Section>
 
         <Section title={<span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-primary" />Zabbix 观测项</span>}>
-          {cfg ? (
-            <div className="rounded-lg border bg-card">
-              <div className="px-3 py-2 border-b text-xs text-muted-foreground">映射 Zabbix Host：<span className="text-foreground font-mono">{cfg.zabbixHost}</span></div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>指标</TableHead>
-                    <TableHead>Zabbix Key</TableHead>
-                    <TableHead>关注 / 异常阈值</TableHead>
-                    <TableHead>观察窗口</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {cfg.items.map((it) => (
-                    <TableRow key={it.key}>
-                      <TableCell className="text-sm font-medium">{it.name}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{it.key}</TableCell>
-                      <TableCell className="text-xs">≥ <span className="text-warning">{it.warn}</span> / ≥ <span className="text-destructive">{it.crit}</span></TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{it.window}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+          {hosts.length ? (
+            <div className="space-y-2">
+              {hosts.map((h) => (
+                <div key={h} className="rounded-lg border bg-card p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-mono text-xs text-primary">{h}</span>
+                    <span className="text-[11px] text-muted-foreground">{cfg?.hostItems[h]?.length ?? 0} 项</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(cfg?.hostItems[h] ?? []).map((it) => (
+                      <Badge key={it} variant="secondary" className="text-xs font-normal">{it}</Badge>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <EmptyHint text="尚未配置 Zabbix 观测项" />
@@ -422,17 +605,10 @@ function AssetDetail({ asset, onEdit }: { asset: Asset; onEdit: () => void }) {
         </Section>
 
         <Section title={<span className="flex items-center gap-1.5"><FileText className="h-4 w-4 text-info" />日志观测（Filebeat + ES）</span>}>
-          {cfg && cfg.logSources.length ? (
-            <div className="space-y-2">
-              {cfg.logSources.map((l, i) => (
-                <div key={i} className="rounded-lg border bg-card p-3 text-xs space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-primary">{l.source}</span>
-                    <StatusBadge tone="muted">{l.logType}</StatusBadge>
-                  </div>
-                  <div className="text-muted-foreground">路径：<span className="font-mono text-foreground/80">{l.path}</span></div>
-                  <div className="text-muted-foreground">窗口：{l.window} · 关键字：<span className="text-foreground/80">{l.keywords.join("、")}</span></div>
-                </div>
+          {logSources.length ? (
+            <div className="flex flex-wrap gap-1.5">
+              {logSources.map((s) => (
+                <Badge key={s} variant="secondary" className="text-xs font-mono font-normal">{s}</Badge>
               ))}
             </div>
           ) : (
@@ -444,7 +620,7 @@ function AssetDetail({ asset, onEdit }: { asset: Asset; onEdit: () => void }) {
           <Button variant="outline" size="sm" onClick={onEdit}>
             <Pencil className="h-4 w-4 mr-1" />编辑资产
           </Button>
-          <Button variant="outline" size="sm" onClick={() => toast({ title: "编辑观测配置", description: "Demo 环境暂未开放" })}>
+          <Button variant="outline" size="sm" onClick={onEditObs}>
             <Settings2 className="h-4 w-4 mr-1" />编辑观测配置
           </Button>
         </div>
