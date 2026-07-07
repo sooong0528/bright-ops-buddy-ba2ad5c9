@@ -15,7 +15,7 @@ import { toast } from "@/hooks/use-toast";
 
 export default function Analysis() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"待处理" | "分析中" | "已闭环" | "全部">("全部");
+  const [tab, setTab] = useState<"待处理" | "分析中" | "已恢复" | "已忽略" | "全部">("全部");
   const [keyword, setKeyword] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
 
