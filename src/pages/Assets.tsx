@@ -48,17 +48,33 @@ const logSourcePoolByType: Record<AssetType, string[]> = {
   中间件: ["es-mq-log", "es-redis-log", "es-kafka-log"],
 };
 
+type LogSourceEntry = { source: string; purpose: string };
+
 type EditableConfig = {
   hostItems: Record<string, string[]>;   // host -> selected items
-  logSources: string[];
+  logSources: LogSourceEntry[];
 };
+
+// 日志用途候选（用于输入提示 & datalist）
+const logPurposePresets = ["系统日志", "安全日志", "运行日志", "应用日志", "错误日志", "访问日志"];
+
+// 根据日志源名称给一个默认用途，方便初始化
+function guessPurpose(source: string): string {
+  const s = source.toLowerCase();
+  if (s.includes("system") || s.includes("syslog")) return "系统日志";
+  if (s.includes("nginx") || s.includes("access")) return "访问日志";
+  if (s.includes("error")) return "错误日志";
+  if (s.includes("app")) return "应用日志";
+  if (s.includes("mysql") || s.includes("oracle") || s.includes("pg")) return "运行日志";
+  return "运行日志";
+}
 
 function initConfigs(): Record<string, EditableConfig> {
   const init: Record<string, EditableConfig> = {};
   Object.values(observationConfigs).forEach((c) => {
     init[c.assetId] = {
       hostItems: { [c.zabbixHost]: c.items.map((i) => i.name) },
-      logSources: c.logSources.map((l) => l.source),
+      logSources: c.logSources.map((l) => ({ source: l.source, purpose: l.logType || guessPurpose(l.source) })),
     };
   });
   return init;
@@ -74,6 +90,7 @@ function statusOf(cfg?: EditableConfig): Asset["observationStatus"] {
   if (hasItems || hasLogs) return "部分配置";
   return "未配置";
 }
+
 
 type FormState = Partial<Asset>;
 
@@ -420,7 +437,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
-/* ============ 观测配置编辑器（侧抽屉 + Zabbix / 日志 两类 Tab） ============ */
+/* ============ 观测配置编辑器（三栏侧抽屉：左 Host 列，右 Zabbix 指标 + 日志源） ============ */
 function ObservationEditor({
   asset, value, onCancel, onSave,
 }: {
@@ -430,14 +447,19 @@ function ObservationEditor({
   onSave: (cfg: EditableConfig) => void;
 }) {
   const [hostItems, setHostItems] = useState<Record<string, string[]>>(value.hostItems ?? {});
-  const [logSources, setLogSources] = useState<string[]>(value.logSources ?? []);
+  const [logSources, setLogSources] = useState<LogSourceEntry[]>(value.logSources ?? []);
   const [activeHost, setActiveHost] = useState<string | null>(() => Object.keys(value.hostItems ?? {})[0] ?? null);
-  const [tab, setTab] = useState<"zabbix" | "log">("zabbix");
+  const [hostKeyword, setHostKeyword] = useState("");
   const itemPool = itemPoolByType[asset.type];
   const logPool = logSourcePoolByType[asset.type];
 
   const selectedHosts = Object.keys(hostItems);
   const totalItems = selectedHosts.reduce((n, h) => n + (hostItems[h]?.length ?? 0), 0);
+
+  const filteredHosts = useMemo(
+    () => zabbixHostPool.filter((h) => !hostKeyword || h.includes(hostKeyword)),
+    [hostKeyword],
+  );
 
   const toggleHost = (h: string) => {
     setHostItems((prev) => {
@@ -461,8 +483,20 @@ function ObservationEditor({
       return { ...prev, [h]: has ? cur.filter((x) => x !== it) : [...cur, it] };
     });
   };
+  const setItemsAll = (h: string, checked: boolean) => {
+    setHostItems((prev) => ({ ...prev, [h]: checked ? [...itemPool] : [] }));
+  };
+
+  const findLog = (s: string) => logSources.find((l) => l.source === s);
   const toggleLog = (s: string) => {
-    setLogSources((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+    setLogSources((prev) => {
+      const has = prev.find((l) => l.source === s);
+      if (has) return prev.filter((l) => l.source !== s);
+      return [...prev, { source: s, purpose: guessPurpose(s) }];
+    });
+  };
+  const updateLogPurpose = (s: string, purpose: string) => {
+    setLogSources((prev) => prev.map((l) => (l.source === s ? { ...l, purpose } : l)));
   };
 
   return (
@@ -470,119 +504,136 @@ function ObservationEditor({
       <SheetHeader className="px-6 pt-6 pb-3 border-b">
         <SheetTitle className="text-base">编辑观测配置 · {asset.name}</SheetTitle>
         <p className="text-xs text-muted-foreground font-normal">
-          按 <span className="text-foreground">Zabbix 指标</span> 与 <span className="text-foreground">日志</span> 两类配置观测。阈值与观察窗口在「巡检配置」中维护。
+          左侧选择 Zabbix Host，右侧一次性维护 <span className="text-foreground">Zabbix 指标</span> 与 <span className="text-foreground">日志源</span>。阈值与观察窗口在「巡检配置」中维护。
         </p>
       </SheetHeader>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col">
-        <div className="px-6 pt-4">
-          <TabsList>
-            <TabsTrigger value="zabbix" className="gap-1.5">
-              <Activity className="h-3.5 w-3.5" />Zabbix 指标
-              <span className="text-[11px] text-muted-foreground ml-1">{selectedHosts.length} Host · {totalItems} 项</span>
-            </TabsTrigger>
-            <TabsTrigger value="log" className="gap-1.5">
-              <FileText className="h-3.5 w-3.5" />日志
-              <span className="text-[11px] text-muted-foreground ml-1">{logSources.length} 源</span>
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        {/* Zabbix：级联多选（左 Host 列，右 观测项） */}
-        {tab === "zabbix" && (
-          <div className="flex-1 px-6 pt-4 pb-2">
-            <div className="rounded-lg border overflow-hidden grid grid-cols-[220px_1fr] min-h-[380px]">
-              {/* 左：Host 列 */}
-              <div className="border-r bg-muted/20">
-                <div className="px-3 py-2 text-[11px] text-muted-foreground border-b bg-background/60">
-                  Zabbix Host（{selectedHosts.length} / {zabbixHostPool.length}）
-                </div>
-                <div className="max-h-[420px] overflow-y-auto">
-                  {zabbixHostPool.map((h) => {
-                    const checked = !!hostItems[h];
-                    const active = activeHost === h;
-                    return (
-                      <div
-                        key={h}
-                        onClick={() => checked && setActiveHost(h)}
-                        className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer border-l-2 ${
-                          active ? "border-primary bg-primary-soft/60" : "border-transparent hover:bg-muted/50"
-                        }`}
-                      >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={() => toggleHost(h)}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <span className="font-mono flex-1 truncate">{h}</span>
-                        {checked && <span className="text-[10px] text-muted-foreground">{hostItems[h]?.length ?? 0}</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 右：观测项 */}
-              <div>
-                <div className="px-3 py-2 text-[11px] text-muted-foreground border-b bg-background/60 flex items-center justify-between">
-                  <span>观测项{activeHost ? ` · ${activeHost}` : ""}</span>
-                  <span>推荐：{itemPool.join("、")}</span>
-                </div>
-                {activeHost && hostItems[activeHost] ? (
-                  <div className="p-3 space-y-1">
-                    {itemPool.map((it) => {
-                      const checked = hostItems[activeHost]?.includes(it);
-                      return (
-                        <label
-                          key={it}
-                          className={`flex items-center gap-2 px-2.5 py-2 rounded-md text-xs cursor-pointer ${
-                            checked ? "bg-primary-soft/60" : "hover:bg-muted/40"
-                          }`}
-                        >
-                          <Checkbox checked={checked} onCheckedChange={() => toggleItem(activeHost, it)} />
-                          {it}
-                        </label>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-xs text-muted-foreground p-6">
-                    请在左侧勾选 Zabbix Host，再选择其观测项
-                  </div>
-                )}
-              </div>
+      <div className="flex-1 grid grid-cols-[260px_1fr] min-h-0">
+        {/* 左：Host 池（搜索 + 复选） */}
+        <aside className="border-r bg-muted/10 flex flex-col min-h-0">
+          <div className="p-3 border-b space-y-2">
+            <div className="text-xs font-medium flex items-center justify-between">
+              <span>Zabbix Host</span>
+              <span className="text-muted-foreground">已选 {selectedHosts.length}</span>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input value={hostKeyword} onChange={(e) => setHostKeyword(e.target.value)}
+                placeholder="搜索 Host" className="h-8 pl-7 text-xs" />
             </div>
           </div>
-        )}
+          <div className="flex-1 overflow-y-auto">
+            {filteredHosts.length === 0 && (
+              <div className="p-4 text-center text-xs text-muted-foreground">无匹配 Host</div>
+            )}
+            {filteredHosts.map((h) => {
+              const checked = !!hostItems[h];
+              const active = activeHost === h;
+              return (
+                <div
+                  key={h}
+                  onClick={() => checked && setActiveHost(h)}
+                  className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer border-l-2 ${
+                    active ? "border-primary bg-primary-soft/60" : "border-transparent hover:bg-muted/50"
+                  }`}
+                >
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={() => toggleHost(h)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <span className="font-mono flex-1 truncate">{h}</span>
+                  {checked && <span className="text-[10px] text-muted-foreground">{hostItems[h]?.length ?? 0}</span>}
+                </div>
+              );
+            })}
+          </div>
+          <div className="border-t px-3 py-2 text-[11px] text-muted-foreground">
+            共 {totalItems} 项指标 · {logSources.length} 个日志源
+          </div>
+        </aside>
 
-        {/* 日志源 */}
-        {tab === "log" && (
-          <div className="flex-1 px-6 pt-4 pb-2">
-            <div className="rounded-lg border p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs text-muted-foreground">日志源（可多选，推荐：{logPool.join("、")}）</span>
-                <span className="text-xs text-muted-foreground">已选 {logSources.length}</span>
-              </div>
+        {/* 右：分区（Zabbix 指标 + 日志源） */}
+        <section className="overflow-y-auto p-5 space-y-5">
+          {/* Zabbix 指标 */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                <Activity className="h-4 w-4 text-primary" />Zabbix 指标
+                {activeHost && <span className="text-xs text-muted-foreground font-normal font-mono ml-1">· {activeHost}</span>}
+              </h4>
+              {activeHost && hostItems[activeHost] && (
+                <div className="flex gap-1">
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                    onClick={() => setItemsAll(activeHost, hostItems[activeHost]?.length !== itemPool.length)}>
+                    {hostItems[activeHost]?.length === itemPool.length ? "全不选" : "推荐全选"}
+                  </Button>
+                </div>
+              )}
+            </div>
+            {activeHost && hostItems[activeHost] ? (
               <div className="grid grid-cols-2 gap-2">
-                {logPool.map((s) => {
-                  const checked = logSources.includes(s);
+                {itemPool.map((it) => {
+                  const checked = hostItems[activeHost]?.includes(it);
                   return (
-                    <label
-                      key={s}
-                      className={`flex items-center gap-2 rounded-md border px-3 py-2.5 text-xs cursor-pointer ${
-                        checked ? "border-primary bg-primary-soft" : "hover:bg-muted/40"
-                      }`}
-                    >
-                      <Checkbox checked={checked} onCheckedChange={() => toggleLog(s)} />
-                      <span className="font-mono">{s}</span>
+                    <label key={it}
+                      className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs cursor-pointer ${
+                        checked ? "border-primary bg-primary-soft/60" : "hover:bg-muted/40"
+                      }`}>
+                      <Checkbox checked={checked} onCheckedChange={() => toggleItem(activeHost, it)} />
+                      {it}
                     </label>
                   );
                 })}
               </div>
+            ) : (
+              <EmptyHint text="请在左侧勾选 Zabbix Host，选中后再配置指标" />
+            )}
+          </div>
+
+          {/* 日志源 */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                <FileText className="h-4 w-4 text-info" />日志源
+                <span className="text-xs text-muted-foreground font-normal ml-1">已选 {logSources.length}</span>
+              </h4>
+              <span className="text-[11px] text-muted-foreground">推荐：{logPool.join("、")}</span>
+            </div>
+            <datalist id="log-purpose-presets">
+              {logPurposePresets.map((p) => <option key={p} value={p} />)}
+            </datalist>
+            <div className="space-y-2">
+              {logPool.map((s) => {
+                const entry = findLog(s);
+                const checked = !!entry;
+                return (
+                  <div key={s}
+                    className={`rounded-md border px-3 py-2.5 ${checked ? "border-primary bg-primary-soft/40" : "bg-card"}`}>
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={checked} onCheckedChange={() => toggleLog(s)} />
+                      <span className="font-mono text-xs flex-1">{s}</span>
+                      <span className="text-[10px] text-muted-foreground">{checked ? "已启用" : "未启用"}</span>
+                    </div>
+                    {checked && (
+                      <div className="mt-2 pl-6">
+                        <Label className="text-[11px] text-muted-foreground">日志用途</Label>
+                        <Input
+                          list="log-purpose-presets"
+                          value={entry?.purpose ?? ""}
+                          onChange={(e) => updateLogPurpose(s, e.target.value)}
+                          placeholder="系统日志 / 安全日志 / 运行日志 / 应用日志 / 错误日志 / 访问日志"
+                          className="h-8 mt-1 text-xs"
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
-        )}
-      </Tabs>
+        </section>
+      </div>
 
       <div className="border-t px-6 py-3 flex justify-end gap-2 bg-background">
         <Button variant="outline" size="sm" onClick={onCancel}>取消</Button>
@@ -591,6 +642,7 @@ function ObservationEditor({
     </div>
   );
 }
+
 
 
 function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: EditableConfig; onEdit: () => void; onEditObs: () => void }) {
@@ -661,11 +713,15 @@ function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: Ed
 
         <Section title={<span className="flex items-center gap-1.5"><FileText className="h-4 w-4 text-info" />日志观测（Filebeat + ES）</span>}>
           {logSources.length ? (
-            <div className="flex flex-wrap gap-1.5">
-              {logSources.map((s) => (
-                <Badge key={s} variant="secondary" className="text-xs font-mono font-normal">{s}</Badge>
+            <div className="space-y-1.5">
+              {logSources.map((l) => (
+                <div key={l.source} className="flex items-center justify-between rounded-md border bg-card px-2.5 py-1.5">
+                  <span className="text-xs font-mono">{l.source}</span>
+                  <span className="text-[11px] text-muted-foreground">{l.purpose || "未标注用途"}</span>
+                </div>
               ))}
             </div>
+
           ) : (
             <EmptyHint text="尚未配置日志观测源" />
           )}

@@ -513,148 +513,206 @@ function TaskEditorDialog({
 
   const mergeTargetTask = mergeResult?.mergeIntoTaskId ? existingTasks.find((t) => t.id === mergeResult.mergeIntoTaskId) : null;
 
+  const [assetKeyword, setAssetKeyword] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"全部" | AssetType>("全部");
+
+  const filteredAssets = useMemo(() => {
+    return assets.filter((a) => {
+      if (typeFilter !== "全部" && a.type !== typeFilter) return false;
+      if (assetKeyword && ![a.name, a.ip, a.businessSystem].some((s) => s?.includes(assetKeyword))) return false;
+      return true;
+    });
+  }, [assetKeyword, typeFilter]);
+
+  const groupedAssets = useMemo(() => {
+    return filteredAssets.reduce<Record<AssetType, Asset[]>>((acc, a) => {
+      (acc[a.type] ||= []).push(a);
+      return acc;
+    }, {} as Record<AssetType, Asset[]>);
+  }, [filteredAssets]);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "编辑巡检任务" : "新建巡检任务"}</DialogTitle>
-          <DialogDescription>
-            可手工配置，也可通过自然语言让 AI 生成草稿；保存前可让 AI 评估与现有规则的重叠情况。
-          </DialogDescription>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-[1080px] p-0 overflow-hidden flex flex-col">
+        <SheetHeader className="px-6 pt-6 pb-3 border-b">
+          <SheetTitle className="text-base">{isEdit ? "编辑巡检任务" : "新建巡检任务"}</SheetTitle>
+          <SheetDescription className="text-xs">
+            左侧选择巡检资源（支持搜索/按类型筛选），右侧维护任务基础信息与每个资源的巡检指标。
+          </SheetDescription>
+        </SheetHeader>
 
-        <div className="rounded-lg border border-primary/20 bg-primary-soft/30 p-3 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-sm">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="font-medium">AI 助手</span>
-              <span className="text-xs text-muted-foreground">由 Lovable AI 提供</span>
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => setNlOpen((v) => !v)}>
-                <Wand2 className="h-4 w-4 mr-1" />自然语言生成
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleMergeCheck} disabled={mergeLoading}>
-                {mergeLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <GitMerge className="h-4 w-4 mr-1" />}
-                评估合并建议
-              </Button>
-            </div>
-          </div>
-
-          {nlOpen && (
-            <div className="space-y-2 pt-1">
-              <Textarea rows={3} placeholder="例如：每天早上 7 点对数据库主机做一次内存和磁盘巡检，由 DBA 负责"
-                value={nlPrompt} onChange={(e) => setNlPrompt(e.target.value)} />
-              <div className="flex justify-end gap-2">
-                <Button size="sm" variant="ghost" onClick={() => setNlOpen(false)}>取消</Button>
-                <Button size="sm" onClick={handleNlGenerate} disabled={nlLoading}>
-                  {nlLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
-                  生成草稿
-                </Button>
+        <div className="flex-1 grid grid-cols-[300px_1fr] min-h-0">
+          {/* 左：资源选择 */}
+          <aside className="border-r bg-muted/10 flex flex-col min-h-0">
+            <div className="p-3 border-b space-y-2">
+              <div className="text-xs font-medium flex items-center justify-between">
+                <span>巡检资源</span>
+                <span className="text-muted-foreground">已选 {form.assetSelections.length}</span>
+              </div>
+              <div className="relative">
+                <Input value={assetKeyword} onChange={(e) => setAssetKeyword(e.target.value)}
+                  placeholder="搜索名称 / IP / 业务系统" className="h-8 text-xs" />
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {(["全部", "主机", "数据库", "应用服务", "中间件"] as const).map((t) => (
+                  <button key={t} onClick={() => setTypeFilter(t as any)}
+                    className={`text-[11px] px-2 py-0.5 rounded border ${
+                      typeFilter === t ? "border-primary bg-primary-soft text-primary" : "border-transparent bg-secondary text-muted-foreground hover:bg-muted"
+                    }`}>{t}</button>
+                ))}
               </div>
             </div>
-          )}
-
-          {nlReasoning && !nlOpen && (
-            <div className="rounded-md bg-card border p-2.5 text-xs text-muted-foreground whitespace-pre-line">
-              <span className="font-medium text-foreground">AI 推断说明：</span>{nlReasoning}
-            </div>
-          )}
-
-          {mergeResult && (
-            <MergeSuggestionCard suggestion={mergeResult} targetTask={mergeTargetTask} onApply={applySuggestion} onDismiss={() => setMergeResult(null)} />
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <Label className="text-sm">任务名称</Label>
-            <Input className="mt-1.5" placeholder="例如：核心数据库专项巡检" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </div>
-
-          <div>
-            <Label className="text-sm">任务类型</Label>
-            <Select value={form.type} onValueChange={(v: any) => setForm({ ...form, type: v })}>
-              <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="日常巡检">日常巡检</SelectItem>
-                <SelectItem value="周巡检">周巡检</SelectItem>
-                <SelectItem value="手动巡检">手动巡检</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-sm">调度策略</Label>
-            <Input className="mt-1.5" placeholder="例如：每日 08:00 / 每 30 分钟" value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} />
-          </div>
-
-          <div className="col-span-2">
-            <div className="flex items-baseline justify-between">
-              <Label className="text-sm">巡检资源与指标</Label>
-              <span className="text-xs text-muted-foreground">
-                已选 {form.assetSelections.length} 个资源 · 共 {form.metrics.length} 项指标
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              先选择资源，再为每个资源勾选要巡检的指标；关联关系随任务一起保存。
-            </p>
-            <div className="mt-2 grid grid-cols-[240px_1fr] gap-3 rounded-md border bg-card">
-              {/* 资源列表 */}
-              <div className="border-r max-h-[360px] overflow-y-auto">
-                {(() => {
-                  const grouped = assets.reduce<Record<AssetType, Asset[]>>((acc, a) => {
-                    (acc[a.type] ||= []).push(a);
-                    return acc;
-                  }, {} as Record<AssetType, Asset[]>);
-                  return (Object.keys(grouped) as AssetType[]).map((type) => (
-                    <div key={type}>
-                      <div className="sticky top-0 bg-muted/50 px-2.5 py-1 text-[11px] text-muted-foreground border-b">
-                        {type}
-                      </div>
-                      {grouped[type].map((a) => {
-                        const sel = selectedAssetIds.includes(a.id);
-                        return (
-                          <label key={a.id} className={`flex items-start gap-2 px-2.5 py-2 text-sm cursor-pointer border-b last:border-b-0 hover:bg-secondary/50 ${sel ? "bg-primary-soft/40" : ""}`}>
-                            <Checkbox className="mt-0.5" checked={sel} onCheckedChange={() => toggleAsset(a)} />
-                            <div className="min-w-0">
-                              <div className="truncate font-medium">{a.name}</div>
-                              <div className="text-[11px] text-muted-foreground truncate">{a.businessSystem} · {a.ip}</div>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ));
-                })()}
-              </div>
-              {/* 指标区（按已选资源分组） */}
-              <div className="max-h-[360px] overflow-y-auto p-3 space-y-3">
-                {form.assetSelections.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-16">
-                    请先在左侧选择巡检资源
+            <div className="flex-1 overflow-y-auto">
+              {Object.keys(groupedAssets).length === 0 && (
+                <div className="p-4 text-center text-xs text-muted-foreground">无匹配资源</div>
+              )}
+              {(Object.keys(groupedAssets) as AssetType[]).map((type) => (
+                <div key={type}>
+                  <div className="sticky top-0 bg-muted/60 px-3 py-1 text-[11px] text-muted-foreground border-b">
+                    {type} · {groupedAssets[type].length}
                   </div>
-                ) : (
-                  form.assetSelections.map((s) => {
+                  {groupedAssets[type].map((a) => {
+                    const sel = selectedAssetIds.includes(a.id);
+                    return (
+                      <label key={a.id}
+                        className={`flex items-start gap-2 px-3 py-2 text-sm cursor-pointer border-b last:border-b-0 hover:bg-secondary/50 ${sel ? "bg-primary-soft/40" : ""}`}>
+                        <Checkbox className="mt-0.5" checked={sel} onCheckedChange={() => toggleAsset(a)} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium text-[13px]">{a.name}</div>
+                          <div className="text-[11px] text-muted-foreground truncate">{a.businessSystem} · {a.ip}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </aside>
+
+          {/* 右：任务详情 + AI + 指标 */}
+          <section className="overflow-y-auto p-5 space-y-5">
+            {/* AI 助手 */}
+            <div className="rounded-lg border border-primary/20 bg-primary-soft/30 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <span className="font-medium">AI 助手</span>
+                  <span className="text-xs text-muted-foreground">由 Lovable AI 提供</span>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setNlOpen((v) => !v)}>
+                    <Wand2 className="h-4 w-4 mr-1" />自然语言生成
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handleMergeCheck} disabled={mergeLoading}>
+                    {mergeLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <GitMerge className="h-4 w-4 mr-1" />}
+                    评估合并建议
+                  </Button>
+                </div>
+              </div>
+
+              {nlOpen && (
+                <div className="space-y-2 pt-1">
+                  <Textarea rows={3} placeholder="例如：每天早上 7 点对数据库主机做一次内存和磁盘巡检，由 DBA 负责"
+                    value={nlPrompt} onChange={(e) => setNlPrompt(e.target.value)} />
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => setNlOpen(false)}>取消</Button>
+                    <Button size="sm" onClick={handleNlGenerate} disabled={nlLoading}>
+                      {nlLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                      生成草稿
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {nlReasoning && !nlOpen && (
+                <div className="rounded-md bg-card border p-2.5 text-xs text-muted-foreground whitespace-pre-line">
+                  <span className="font-medium text-foreground">AI 推断说明：</span>{nlReasoning}
+                </div>
+              )}
+
+              {mergeResult && (
+                <MergeSuggestionCard suggestion={mergeResult} targetTask={mergeTargetTask} onApply={applySuggestion} onDismiss={() => setMergeResult(null)} />
+              )}
+            </div>
+
+            {/* 基础信息 */}
+            <div className="rounded-lg border bg-card p-4 space-y-3">
+              <div className="text-sm font-semibold">任务基础信息</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label className="text-xs">任务名称</Label>
+                  <Input className="mt-1.5 h-9" placeholder="例如：核心数据库专项巡检"
+                    value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="text-xs">任务类型</Label>
+                  <Select value={form.type} onValueChange={(v: any) => setForm({ ...form, type: v })}>
+                    <SelectTrigger className="mt-1.5 h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="日常巡检">日常巡检</SelectItem>
+                      <SelectItem value="周巡检">周巡检</SelectItem>
+                      <SelectItem value="手动巡检">手动巡检</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">调度策略</Label>
+                  <Input className="mt-1.5 h-9" placeholder="每日 08:00 / 每 30 分钟"
+                    value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="text-xs">负责人</Label>
+                  <Input className="mt-1.5 h-9" value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
+                </div>
+                <div className="flex items-end">
+                  <div className="flex items-center justify-between w-full rounded-md border bg-background px-3 h-9">
+                    <Label className="text-xs">启用任务</Label>
+                    <Switch checked={form.enabled} onCheckedChange={(v) => setForm({ ...form, enabled: v })} />
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">任务描述</Label>
+                  <Textarea className="mt-1.5" rows={2} placeholder="说明该巡检任务的业务背景、关注点等"
+                    value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                </div>
+              </div>
+            </div>
+
+            {/* 指标区 */}
+            <div>
+              <div className="flex items-baseline justify-between mb-2">
+                <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                  <ListChecks className="h-4 w-4 text-primary" />每资源巡检指标
+                </h4>
+                <span className="text-xs text-muted-foreground">
+                  {form.assetSelections.length} 个资源 · 共 {form.metrics.length} 项指标
+                </span>
+              </div>
+              {form.assetSelections.length === 0 ? (
+                <div className="rounded-md border border-dashed py-10 text-center text-sm text-muted-foreground">
+                  请在左侧选择巡检资源，选中后即可为每个资源勾选指标
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {form.assetSelections.map((s) => {
                     const a = assets.find((x) => x.id === s.assetId);
                     if (!a) return null;
                     const pool = metricPoolByType[a.type];
                     const allChecked = s.metrics.length === pool.length;
                     return (
-                      <div key={s.assetId} className="rounded-md border bg-background">
+                      <div key={s.assetId} className="rounded-md border bg-card">
                         <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
                           <div className="min-w-0">
                             <div className="text-sm font-medium truncate">{a.name}</div>
                             <div className="text-[11px] text-muted-foreground truncate">{a.type} · {pool.length} 项可选 · 已选 {s.metrics.length}</div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-1 shrink-0">
                             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
                               onClick={() => setAssetMetricsAll(a.id, !allChecked)}>
                               {allChecked ? "全不选" : "全选"}
                             </Button>
                             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-                              onClick={() => toggleAsset(a)}>
-                              移除
-                            </Button>
+                              onClick={() => toggleAsset(a)}>移除</Button>
                           </div>
                         </div>
                         <div className="p-2 grid grid-cols-2 md:grid-cols-3 gap-1.5">
@@ -662,7 +720,7 @@ function TaskEditorDialog({
                             const checked = s.metrics.includes(m);
                             return (
                               <label key={m} className={`flex items-center gap-2 rounded border px-2 py-1.5 cursor-pointer text-xs ${
-                                checked ? "border-primary bg-primary-soft/40" : "bg-card hover:bg-secondary/50"
+                                checked ? "border-primary bg-primary-soft/40" : "bg-background hover:bg-secondary/50"
                               }`}>
                                 <Checkbox checked={checked} onCheckedChange={() => toggleAssetMetric(a.id, m)} />
                                 {m}
@@ -672,38 +730,22 @@ function TaskEditorDialog({
                         </div>
                       </div>
                     );
-                  })
-                )}
-              </div>
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-
-          <div>
-            <Label className="text-sm">负责人</Label>
-            <Input className="mt-1.5" value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
-          </div>
-          <div className="flex items-end">
-            <div className="flex items-center justify-between w-full rounded-md border bg-card px-3 h-10">
-              <Label className="text-sm">启用任务</Label>
-              <Switch checked={form.enabled} onCheckedChange={(v) => setForm({ ...form, enabled: v })} />
-            </div>
-          </div>
-
-          <div className="col-span-2">
-            <Label className="text-sm">任务描述</Label>
-            <Textarea className="mt-1.5" rows={3} placeholder="说明该巡检任务的业务背景、关注点等"
-              value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          </div>
+          </section>
         </div>
 
-        <DialogFooter>
+        <div className="border-t px-6 py-3 flex justify-end gap-2 bg-background">
           <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
           <Button onClick={submit}>{isEdit ? "保存修改" : "创建任务"}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
+
 
 function MergeSuggestionCard({
   suggestion, targetTask, onApply, onDismiss,
