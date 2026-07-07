@@ -75,7 +75,6 @@ export const defaultCheckItemsByAssetType: Record<AssetType, CheckItemConfig[]> 
     { key: "mem", name: "内存使用率", enabled: true, warn: "≥75%", crit: "≥90%", window: "10 分钟平均值" },
     { key: "disk", name: "磁盘使用率", enabled: true, warn: "≥75%", crit: "≥90%", window: "30 分钟最大值" },
     { key: "ping", name: "Ping 连通性", enabled: true, warn: "1 次失败", crit: "连续 3 次失败", window: "最近 3 次" },
-    { key: "agent", name: "Agent 可用性", enabled: true, warn: "-", crit: "不可用", window: "当前状态" },
   ],
   应用服务: [
     { key: "port", name: "端口存活", enabled: true, warn: "1 次失败", crit: "连续 3 次失败", window: "最近 3 次" },
