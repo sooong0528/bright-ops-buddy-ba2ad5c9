@@ -216,7 +216,10 @@ export interface AnalysisTask {
   assetType: AssetType;
   businessSystem: string;
   metric: string;
-  level: AbnormalLevel;
+  /** 当前级别：最近一次巡检命中的级别 */
+  currentLevel: AbnormalLevel;
+  /** 最高级别：本次问题周期内曾达到的最高级别 */
+  maxLevel: AbnormalLevel;
   source: "异常记录" | "手动";
   createdBy: string;
   createdAt: string;
