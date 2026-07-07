@@ -100,55 +100,47 @@ export default function Inspection() {
         <SummaryTile icon={AlertTriangle} label="产生异常/关注记录" value={String(runStats.abnormal + runStats.attention)} tone="destructive" sub={`异常 ${runStats.abnormal} · 关注 ${runStats.attention}`} />
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Tabs value={range} onValueChange={(v) => setRange(v as RangeKey)}>
-          <TabsList>
-            <TabsTrigger value="today">本日</TabsTrigger>
-            <TabsTrigger value="week">本周</TabsTrigger>
-            <TabsTrigger value="month">本月</TabsTrigger>
-          </TabsList>
-        </Tabs>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="搜索方案 / 摘要"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              className="h-9 pl-8 w-56"
+            />
+          </div>
+          <Select value={taskFilter} onValueChange={setTaskFilter}>
+            <SelectTrigger className="h-9 w-44"><SelectValue placeholder="全部方案" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部方案</SelectItem>
+              {inspectionTasks.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-9 w-32"><SelectValue placeholder="全部状态" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部状态</SelectItem>
+              <SelectItem value="已完成">已完成</SelectItem>
+              <SelectItem value="运行中">运行中</SelectItem>
+              <SelectItem value="失败">失败</SelectItem>
+            </SelectContent>
+          </Select>
+          <Tabs value={range} onValueChange={(v) => setRange(v as RangeKey)}>
+            <TabsList>
+              <TabsTrigger value="today">本日</TabsTrigger>
+              <TabsTrigger value="week">本周</TabsTrigger>
+              <TabsTrigger value="month">本月</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
         <Button variant="outline"><RefreshCw className="h-4 w-4 mr-2" />刷新</Button>
       </div>
 
       <div className="panel">
-        <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-3">
-          <div>
-            <h3 className="font-semibold">巡检结果</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              展示每次巡检执行的整体结果。异常与关注的可跟踪问题请前往「异常记录」查看与处理。
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="搜索方案 / 摘要"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                className="h-9 pl-8 w-56"
-              />
-            </div>
-            <Select value={taskFilter} onValueChange={setTaskFilter}>
-              <SelectTrigger className="h-9 w-44"><SelectValue placeholder="全部方案" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部方案</SelectItem>
-                {inspectionTasks.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 w-32"><SelectValue placeholder="全部状态" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部状态</SelectItem>
-                <SelectItem value="已完成">已完成</SelectItem>
-                <SelectItem value="运行中">运行中</SelectItem>
-                <SelectItem value="失败">失败</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
         <Table>
           <TableHeader>
             <TableRow>

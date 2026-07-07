@@ -149,12 +149,7 @@ export default function AbnormalRecords() {
       </div>
 
       <div className="panel">
-        <div className="px-5 pt-5 pb-3">
-          <h3 className="font-semibold">异常/关注记录</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            可跟踪、可处理、可闭环的问题记录。同一资产 + 指标 + 触发规则在未闭环前会合并为一条记录，仅更新最近发现时间与持续时间。
-          </p>
-        </div>
+
 
         <Table>
           <TableHeader>
