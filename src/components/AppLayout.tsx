@@ -14,6 +14,7 @@ const titleMap: Record<string, { title: string; sub: string }> = {
   "/assistant": { title: "智能问答", sub: "知识库问答 · 数据查询 · 上下文追问" },
   "/reports": { title: "报告中心", sub: "巡检报告 / 故障分析报告 / 知识服务情况分析报告" },
   "/assets": { title: "资产管理", sub: "轻量资产档案与观测配置" },
+  "/inspection/abnormal": { title: "异常记录", sub: "可跟踪、可处理、可闭环的巡检问题记录" },
   "/knowledge": { title: "知识库管理", sub: "运维手册、SOP、故障案例、应急预案维护" },
   "/users": { title: "用户与权限", sub: "账号、角色与访问权限管理" },
   "/audit": { title: "审计留痕", sub: "任务、问答、报告、Agent 与数据来源全过程留痕" },
