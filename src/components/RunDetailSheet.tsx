@@ -6,7 +6,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
-import { Clock, User as UserIcon, Calendar, ListChecks, AlertTriangle, AlertCircle, CheckCircle2, Target } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import { toast } from "@/hooks/use-toast";
+import { Clock, User as UserIcon, Calendar, ListChecks, AlertTriangle, AlertCircle, CheckCircle2, Target, Wrench, MessageSquare } from "lucide-react";
 import {
   assets,
   hosts,
@@ -86,6 +89,25 @@ export function RunDetailSheet({ run, task, onClose }: Props) {
   const scopedAssets = run && task ? resolveScopedAssets(task) : [];
   const enabledItems = (task?.checkItems ?? []).filter((i) => i.enabled);
 
+  const navigate = useNavigate();
+
+  const startAnalysis = (assetName: string, itemName: string, value: string, level: string) => {
+    toast({ title: "已发起故障分析", description: `${assetName} · ${itemName} · ${value}` });
+    sessionStorage.setItem("analysis.pendingContext", JSON.stringify({
+      assetName, itemName, value, level, runId: run?.id, taskName: task?.name,
+    }));
+    navigate("/analysis");
+  };
+
+  const askInAssistant = (assetName: string, itemName: string, value: string, level: string) => {
+    sessionStorage.setItem("assistant.pendingReportContext", JSON.stringify({
+      id: `${run?.id}-${assetName}-${itemName}`,
+      title: `${assetName} · ${itemName}（${level} ${value}）`,
+      type: "巡检异常追问",
+    }));
+    navigate("/assistant");
+  };
+
   return (
     <Sheet open={!!run} onOpenChange={(v) => !v && onClose()}>
       <SheetContent className="sm:max-w-3xl w-full overflow-y-auto">
@@ -153,27 +175,70 @@ export function RunDetailSheet({ run, task, onClose }: Props) {
                           <span className="text-xs text-muted-foreground">{a.businessSystem}</span>
                         </div>
 
-                        {enabledItems.length > 0 && (
-                          <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1.5 text-xs">
-                            {enabledItems.map((item) => {
-                              const { value, level } = mockItemValue(a.id, item);
-                              const tone =
-                                level === "异常" ? "destructive"
-                                : level === "关注" ? "warning"
-                                : level === "无数据" ? "muted"
-                                : "success";
-                              return (
-                                <div key={item.key} className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground truncate">{item.name}</span>
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <span className="tabular-nums text-foreground">{value}</span>
-                                    <StatusBadge tone={tone}>{level}</StatusBadge>
-                                  </span>
+                        {enabledItems.length > 0 && (() => {
+                          const rows = enabledItems.map((item) => ({ item, ...mockItemValue(a.id, item) }));
+                          const abnormal = rows.filter((r) => r.level === "异常" || r.level === "关注");
+                          const others = rows.filter((r) => r.level !== "异常" && r.level !== "关注");
+                          return (
+                            <div className="mt-2 space-y-2">
+                              {abnormal.length > 0 && (
+                                <div className="space-y-1.5">
+                                  {abnormal.map(({ item, value, level }) => {
+                                    const tone = level === "异常" ? "destructive" : "warning";
+                                    return (
+                                      <div
+                                        key={item.key}
+                                        className={`rounded-md border-l-2 px-2.5 py-1.5 flex items-center gap-2 flex-wrap ${
+                                          level === "异常"
+                                            ? "border-destructive bg-destructive-soft/40"
+                                            : "border-warning bg-warning-soft/40"
+                                        }`}
+                                      >
+                                        <span className="text-xs font-medium truncate">{item.name}</span>
+                                        <span className="text-xs tabular-nums text-foreground">{value}</span>
+                                        <StatusBadge tone={tone}>{level}</StatusBadge>
+                                        <div className="ml-auto flex items-center gap-1">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-6 px-2 text-xs"
+                                            onClick={() => startAnalysis(a.name, item.name, value, level)}
+                                          >
+                                            <Wrench className="h-3 w-3 mr-1" />故障分析
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-6 px-2 text-xs"
+                                            onClick={() => askInAssistant(a.name, item.name, value, level)}
+                                          >
+                                            <MessageSquare className="h-3 w-3 mr-1" />追问
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                              )}
+                              {others.length > 0 && (
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1.5 text-xs">
+                                  {others.map(({ item, value, level }) => {
+                                    const tone = level === "无数据" ? "muted" : "success";
+                                    return (
+                                      <div key={item.key} className="flex items-center justify-between gap-2">
+                                        <span className="text-muted-foreground truncate">{item.name}</span>
+                                        <span className="inline-flex items-center gap-1.5">
+                                          <span className="tabular-nums text-foreground">{value}</span>
+                                          <StatusBadge tone={tone}>{level}</StatusBadge>
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {assetAlerts.length > 0 && (
                           <div className="mt-2 space-y-1">
