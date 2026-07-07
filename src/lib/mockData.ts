@@ -19,6 +19,18 @@ export interface Host {
   uptime: string;
 }
 
+export type SchemeScopeType = "全部" | "指定业务系统" | "指定资产";
+
+export interface CheckItemConfig {
+  key: string;
+  name: string;
+  enabled: boolean;
+  warn: string;   // 关注条件
+  crit: string;   // 异常条件
+  window: string; // 判定窗口
+  optional?: boolean;
+}
+
 export interface InspectionTask {
   id: string;
   name: string;
@@ -30,7 +42,7 @@ export interface InspectionTask {
   attention: number;
   abnormal: number;
   description?: string;
-  /** 资源 → 该资源上要巡检的指标（明确关联关系） */
+  /** 资源 → 该资源上要巡检的指标（兼容字段，由 assetIds + checkItems 派生） */
   assetSelections: { assetId: string; metrics: string[] }[];
   /** 兼容旧字段：资源名称的扁平列表 */
   targets: string[];
@@ -39,7 +51,56 @@ export interface InspectionTask {
   enabled: boolean;
   owner: string;
   createdAt: string;
+
+  /* ===== 巡检方案新字段（MVP） ===== */
+  appliesTo?: AssetType;
+  scopeType?: SchemeScopeType;
+  businessSystems?: string[];
+  environments?: Environment[];
+  assetIds?: string[];
+  checkItems?: CheckItemConfig[];
+  scheduleMode?: "定时" | "手动";
+  frequency?: string;
+  runAt?: string;
+  notifyMode?: "不通知" | "通知资产负责人";
+  notifyChannels?: string[];
+  generateReport?: boolean;
+  lastResult?: "正常" | "关注" | "异常" | "—";
 }
+
+/** 各资产类型默认推荐巡检项 */
+export const defaultCheckItemsByAssetType: Record<AssetType, CheckItemConfig[]> = {
+  主机: [
+    { key: "cpu", name: "CPU 利用率", enabled: true, warn: "≥75%", crit: "≥90%", window: "10 分钟平均值" },
+    { key: "mem", name: "内存使用率", enabled: true, warn: "≥75%", crit: "≥90%", window: "10 分钟平均值" },
+    { key: "disk", name: "磁盘使用率", enabled: true, warn: "≥75%", crit: "≥90%", window: "30 分钟最大值" },
+    { key: "ping", name: "Ping 连通性", enabled: true, warn: "1 次失败", crit: "连续 3 次失败", window: "最近 3 次" },
+    { key: "agent", name: "Agent 可用性", enabled: true, warn: "-", crit: "不可用", window: "当前状态" },
+  ],
+  应用服务: [
+    { key: "port", name: "端口存活", enabled: true, warn: "1 次失败", crit: "连续 3 次失败", window: "最近 3 次" },
+    { key: "http_status", name: "HTTP 状态码", enabled: true, warn: "非 200", crit: "连续 3 次非 200", window: "最近 3 次" },
+    { key: "http_rt", name: "HTTP 响应时间", enabled: true, warn: "≥1000ms", crit: "≥3000ms", window: "5 分钟平均值" },
+    { key: "app_err_log", name: "应用错误日志数", enabled: true, warn: "≥10 条", crit: "≥50 条", window: "10 分钟" },
+    { key: "access_5xx", name: "访问日志 5xx 数", enabled: true, warn: "≥10 条", crit: "≥50 条", window: "10 分钟" },
+  ],
+  数据库: [
+    { key: "db_avail", name: "数据库可用性", enabled: true, warn: "-", crit: "不可用", window: "当前状态" },
+    { key: "port", name: "端口存活", enabled: true, warn: "1 次失败", crit: "连续 3 次失败", window: "最近 3 次" },
+    { key: "conn", name: "连接数使用率", enabled: true, warn: "≥70%", crit: "≥90%", window: "5 分钟平均值" },
+    { key: "slow_sql", name: "慢查询数", enabled: true, warn: "≥10 次", crit: "≥50 次", window: "10 分钟" },
+    { key: "data_disk", name: "数据盘使用率", enabled: true, warn: "≥75%", crit: "≥90%", window: "30 分钟最大值" },
+    { key: "repl_lag", name: "主从延迟", enabled: false, warn: "≥30s", crit: "≥120s", window: "5 分钟平均值", optional: true },
+  ],
+  中间件: [
+    { key: "port", name: "端口存活", enabled: true, warn: "1 次失败", crit: "连续 3 次失败", window: "最近 3 次" },
+    { key: "proc", name: "进程存活", enabled: true, warn: "-", crit: "进程不存在", window: "当前状态" },
+    { key: "conn", name: "连接数", enabled: true, warn: "≥70%", crit: "≥90%", window: "5 分钟平均值" },
+    { key: "mem", name: "内存使用率", enabled: true, warn: "≥75%", crit: "≥90%", window: "10 分钟平均值" },
+    { key: "queue_lag", name: "消息堆积 / 延迟", enabled: false, warn: "≥1000", crit: "≥5000", window: "10 分钟", optional: true },
+    { key: "err_log", name: "错误日志数", enabled: true, warn: "≥10 条", crit: "≥50 条", window: "10 分钟" },
+  ],
+};
 
 export interface InspectionRun {
   id: string;
