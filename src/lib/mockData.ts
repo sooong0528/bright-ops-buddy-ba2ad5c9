@@ -628,7 +628,7 @@ export const analysisTasks: AnalysisTask[] = [
   {
     id: "an-001", recordId: "abn-001",
     assetName: "app-svc-01", assetType: "主机", businessSystem: "核心交易系统",
-    metric: "CPU 使用率", level: "异常",
+    metric: "CPU 使用率", currentLevel: "异常", maxLevel: "异常",
     source: "异常记录",
     createdBy: "张运维", createdAt: "2025-04-22 09:50",
     completedAt: undefined,
@@ -690,7 +690,7 @@ export const analysisTasks: AnalysisTask[] = [
   {
     id: "an-003", recordId: "abn-003",
     assetName: "db-master-01", assetType: "数据库", businessSystem: "核心交易系统",
-    metric: "内存使用率", level: "关注",
+    metric: "内存使用率", currentLevel: "关注", maxLevel: "异常",
     source: "异常记录",
     createdBy: "李管理", createdAt: "2025-04-22 09:20", completedAt: "2025-04-22 09:26",
     status: "已分析",
@@ -733,7 +733,7 @@ export const analysisTasks: AnalysisTask[] = [
   {
     id: "an-005", recordId: "abn-005",
     assetName: "db-slave-01", assetType: "数据库", businessSystem: "核心交易系统",
-    metric: "磁盘使用率", level: "关注",
+    metric: "磁盘使用率", currentLevel: "关注", maxLevel: "关注",
     source: "异常记录",
     createdBy: "李管理", createdAt: "2025-04-21 08:00", completedAt: "2025-04-21 08:05",
     status: "已分析",
@@ -760,7 +760,7 @@ export const analysisTasks: AnalysisTask[] = [
   {
     id: "an-006", recordId: "abn-006",
     assetName: "rabbitmq-cluster", assetType: "中间件", businessSystem: "核心交易系统",
-    metric: "消息堆积", level: "异常",
+    metric: "消息堆积", currentLevel: "异常", maxLevel: "异常",
     source: "异常记录",
     createdBy: "王巡检", createdAt: "2025-04-22 08:25", completedAt: "2025-04-22 08:27",
     status: "分析失败",
