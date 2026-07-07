@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { Server, Database, Layers, Package, Search, Plus, Settings2, Activity, FileText, Pencil, Trash2 } from "lucide-react";
+import { Server, Database, Layers, Package, Search, Plus, Settings2, Activity, FileText, Pencil, Trash2, RefreshCw, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
