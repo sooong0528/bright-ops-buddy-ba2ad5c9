@@ -176,7 +176,7 @@ function AnalysisDetail({ task, onGoAssistant }: { task: AnalysisTask; onGoAssis
 
       <div className="mt-4 flex flex-wrap gap-2">
         <StatusBadge tone={task.currentLevel === "异常" ? "destructive" : "warning"}>当前级别 {task.currentLevel}</StatusBadge>
-        <StatusBadge tone={task.maxLevel === "异常" ? "destructive" : "warning"}>最高级别 {task.maxLevel}</StatusBadge>
+        
         <StatusBadge tone="muted">发起 {task.createdBy} · {task.createdAt}</StatusBadge>
       </div>
 
