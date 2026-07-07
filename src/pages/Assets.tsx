@@ -581,95 +581,95 @@ function ObservationEditor({
   const activeMappings = activeHost ? hostMappings[activeHost] ?? [] : [];
   const matchedMetrics = activeMappings.filter((m) => m.matchedItems.length > 0).length;
 
+  const primaryHost = selectedHosts[0] ?? null;
+  const primaryHostMeta = primaryHost ? zabbixHostPool.find((h) => h.name === primaryHost) : null;
+
   return (
     <div className="flex flex-col h-full">
       <SheetHeader className="px-6 pt-6 pb-3 border-b">
         <SheetTitle className="text-base">编辑观测配置 · {asset.name}</SheetTitle>
         <p className="text-xs text-muted-foreground font-normal">
-          本页用于维护当前资产的数据来源，包括 <span className="text-foreground">Zabbix Host / Item 映射</span> 和 <span className="text-foreground">ES 日志源配置</span>。
-          {" 一个资产只能关联 1 个主 Host；若同一应用部署在多台机器，请分别建为独立资产。"}
+          本页用于维护当前资产的数据来源。<span className="text-foreground">关联 Zabbix Host</span> 与 <span className="text-foreground">日志源配置</span> 是两类平级的数据来源，日志源不隶属于任何 Host。
+          一个资产只能关联 1 个主 Host；若同一应用部署在多台机器，请分别建为独立资产。
         </p>
       </SheetHeader>
 
-      <div className="flex-1 grid grid-cols-[280px_1fr] min-h-0">
-        {/* 左：Zabbix Host 列表 */}
-        <aside className="border-r bg-muted/10 flex flex-col min-h-0">
-          <div className="p-3 border-b space-y-2">
-            <div className="text-xs font-medium flex items-center justify-between">
-              <span>关联 Zabbix Host</span>
-              <span className="text-muted-foreground">
-                已选 {selectedHosts.length}{singleMode ? " / 1" : ""}
-              </span>
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 min-h-0">
+        {/* ==== 模块 1：关联 Zabbix Host + 推荐巡检项映射 ==== */}
+        <section className="rounded-lg border bg-card">
+          <header className="flex items-center justify-between px-4 py-3 border-b">
+            <div className="flex items-center gap-2">
+              <div className="h-6 w-6 rounded bg-primary-soft flex items-center justify-center">
+                <Server className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold">关联 Zabbix Host</h4>
+                <p className="text-[11px] text-muted-foreground">选择该资产对应的主 Host，用于采集 Zabbix 指标</p>
+              </div>
             </div>
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input value={hostKeyword} onChange={(e) => setHostKeyword(e.target.value)}
-                placeholder="搜索 Host" className="h-8 pl-7 text-xs" />
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {filteredHosts.length === 0 && (
-              <div className="p-4 text-center text-xs text-muted-foreground">无匹配 Host</div>
+            {primaryHost && (
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground"
+                onClick={() => { setHostMappings({}); setActiveHost(null); }}>
+                <Trash2 className="h-3 w-3 mr-0.5" />解除关联
+              </Button>
             )}
-            {filteredHosts.map((h) => {
-              const checked = !!hostMappings[h.name];
-              const active = activeHost === h.name;
-              const matched = matchedCountOfHost(h.name);
-              const total = recommended.length;
-              return (
-                <div
-                  key={h.name}
-                  onClick={() => checked && setActiveHost(h.name)}
-                  className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer border-l-2 ${
-                    active ? "border-primary bg-primary-soft/60" : "border-transparent hover:bg-muted/50"
-                  }`}
-                >
-                  <Checkbox
-                    checked={checked}
-                    onCheckedChange={() => toggleHost(h.name)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-mono truncate">{h.name}</div>
-                    <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-                      <span>{h.itemCount} Items</span>
-                      {checked && (
-                        <span className={`flex items-center gap-0.5 ${matched === total ? "text-success" : "text-warning"}`}>
-                          {matched === total ? <CheckCircle2 className="h-2.5 w-2.5" /> : <AlertCircle className="h-2.5 w-2.5" />}
-                          {matched}/{total} 已匹配
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </aside>
+          </header>
 
-        {/* 右：推荐巡检项映射 + 日志源 */}
-        <section className="overflow-y-auto p-5 space-y-6">
-          {/* 推荐巡检项映射表 */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                <Activity className="h-4 w-4 text-primary" />推荐巡检项映射
-                {activeHost && (
-                  <span className="text-xs text-muted-foreground font-normal font-mono ml-1">· {activeHost}</span>
-                )}
-              </h4>
-              {activeHost && (
-                <span className="text-[11px] text-muted-foreground">
-                  {matchedMetrics}/{activeMappings.length} 已匹配
-                </span>
+          <div className="px-4 py-3 space-y-3">
+            {/* Host 选择器 */}
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Label className="text-[11px] text-muted-foreground">Zabbix Host</Label>
+                <Select value={primaryHost ?? ""} onValueChange={(v) => toggleHost(v)}>
+                  <SelectTrigger className="h-8 mt-1 text-xs">
+                    <SelectValue placeholder="选择 Zabbix Host" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <div className="p-2 border-b">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                        <Input value={hostKeyword} onChange={(e) => setHostKeyword(e.target.value)}
+                          placeholder="搜索 Host" className="h-7 pl-6 text-xs"
+                          onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} />
+                      </div>
+                    </div>
+                    {filteredHosts.length === 0 && (
+                      <div className="p-3 text-center text-xs text-muted-foreground">无匹配 Host</div>
+                    )}
+                    {filteredHosts.map((h) => (
+                      <SelectItem key={h.name} value={h.name} className="text-xs">
+                        <span className="font-mono">{h.name}</span>
+                        <span className="text-[10px] text-muted-foreground ml-2">{h.itemCount} Items</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {primaryHostMeta && (
+                <div className="text-[11px] text-muted-foreground pb-1.5 flex items-center gap-2">
+                  <span>共 {primaryHostMeta.itemCount} 个 Item</span>
+                  <span className={`flex items-center gap-0.5 ${matchedMetrics === activeMappings.length ? "text-success" : "text-warning"}`}>
+                    {matchedMetrics === activeMappings.length ? <CheckCircle2 className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+                    {matchedMetrics}/{activeMappings.length} 推荐项已匹配
+                  </span>
+                </div>
               )}
             </div>
 
-            {activeHost ? (
-              <div className="rounded-lg border overflow-hidden">
+            {/* 推荐巡检项映射表（仅在选中 Host 后展示） */}
+            {primaryHost ? (
+              <div className="rounded-md border overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b">
+                  <div className="text-xs font-medium flex items-center gap-1.5">
+                    <Activity className="h-3.5 w-3.5 text-primary" />
+                    推荐巡检项映射
+                    <span className="text-[11px] text-muted-foreground font-normal font-mono">· {primaryHost}</span>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground">系统推荐核心项，用户仅需确认或修正匹配结果</span>
+                </div>
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/40 text-xs">
+                    <TableRow className="bg-muted/10 text-xs">
                       <TableHead className="h-9 w-[180px]">推荐巡检项</TableHead>
                       <TableHead className="h-9">匹配的 Zabbix Item</TableHead>
                       <TableHead className="h-9 w-[80px]">状态</TableHead>
@@ -696,7 +696,7 @@ function ObservationEditor({
                                 defaultValue={m.matchedItems.join(", ")}
                                 onBlur={(e) => {
                                   const items = e.target.value.split(",").map((x) => x.trim()).filter(Boolean);
-                                  updateMapping(activeHost, m.metric, items);
+                                  updateMapping(primaryHost, m.metric, items);
                                   setEditingMetric(null);
                                 }}
                                 className="h-7 text-xs font-mono"
@@ -726,12 +726,8 @@ function ObservationEditor({
                             )}
                           </TableCell>
                           <TableCell className="align-top py-2 text-right">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 px-2 text-xs"
-                              onClick={() => setEditingMetric(isEditing ? null : m.metric)}
-                            >
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                              onClick={() => setEditingMetric(isEditing ? null : m.metric)}>
                               <RefreshCw className="h-3 w-3 mr-0.5" />
                               {matched ? "更换" : "配置"}
                             </Button>
@@ -742,52 +738,37 @@ function ObservationEditor({
                   </TableBody>
                 </Table>
 
-                <div className="flex items-center justify-between border-t px-3 py-2 bg-muted/20 text-[11px]">
+                <div className="flex items-center justify-between border-t px-3 py-2 bg-muted/10 text-[11px]">
                   <div className="flex gap-3">
-                    <button
-                      type="button"
-                      className="text-primary hover:underline flex items-center gap-1"
-                      onClick={() => setShowAllItems((v) => !v)}
-                    >
+                    <button type="button" className="text-primary hover:underline flex items-center gap-1"
+                      onClick={() => setShowAllItems((v) => !v)}>
                       <ExternalLink className="h-3 w-3" />
-                      {showAllItems ? "收起全部 Item" : `查看全部 Zabbix Item (${zabbixHostPool.find((p) => p.name === activeHost)?.itemCount ?? 0})`}
+                      {showAllItems ? "收起全部 Item" : `查看全部 Zabbix Item (${primaryHostMeta?.itemCount ?? 0})`}
                     </button>
-                    <button
-                      type="button"
-                      className="text-primary hover:underline flex items-center gap-1"
-                      onClick={() => setCustomOpen((v) => !v)}
-                    >
+                    <button type="button" className="text-primary hover:underline flex items-center gap-1"
+                      onClick={() => setCustomOpen((v) => !v)}>
                       <Plus className="h-3 w-3" />添加自定义巡检项
                     </button>
                   </div>
-                  <span className="text-muted-foreground">仅列出推荐核心项，全量 Item 按需展开</span>
                 </div>
 
                 {customOpen && (
                   <div className="border-t px-3 py-2 bg-background flex gap-2 items-end">
                     <div className="flex-1">
                       <Label className="text-[11px] text-muted-foreground">巡检项名称</Label>
-                      <Input
-                        value={customMetric.name}
+                      <Input value={customMetric.name}
                         onChange={(e) => setCustomMetric((v) => ({ ...v, name: e.target.value }))}
-                        placeholder="如：GC 停顿时长"
-                        className="h-7 text-xs mt-1"
-                      />
+                        placeholder="如：GC 停顿时长" className="h-7 text-xs mt-1" />
                     </div>
                     <div className="flex-1">
                       <Label className="text-[11px] text-muted-foreground">Zabbix Item key</Label>
-                      <Input
-                        value={customMetric.item}
+                      <Input value={customMetric.item}
                         onChange={(e) => setCustomMetric((v) => ({ ...v, item: e.target.value }))}
-                        placeholder="jmx[..., FullGCTime]"
-                        className="h-7 text-xs mt-1 font-mono"
-                      />
+                        placeholder="jmx[..., FullGCTime]" className="h-7 text-xs mt-1 font-mono" />
                     </div>
                     <Button size="sm" className="h-7 text-xs" onClick={addCustomMetric}>添加</Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs"
-                      onClick={() => { setCustomOpen(false); setCustomMetric({ name: "", item: "" }); }}>
-                      取消
-                    </Button>
+                      onClick={() => { setCustomOpen(false); setCustomMetric({ name: "", item: "" }); }}>取消</Button>
                   </div>
                 )}
 
@@ -805,31 +786,36 @@ function ObservationEditor({
                 )}
               </div>
             ) : (
-              <EmptyHint text="请在左侧勾选 Zabbix Host，再维护推荐巡检项与 Item 的映射关系" />
+              <EmptyHint text="尚未关联 Zabbix Host，请在上方选择" />
             )}
           </div>
+        </section>
 
-          {/* 日志源（资产级） */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                <FileText className="h-4 w-4 text-info" />日志源配置
-                <span className="text-xs text-muted-foreground font-normal ml-1">
-                  已启用 {logSources.filter((l) => l.enabled).length} / {logSources.length}
-                </span>
-              </h4>
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={addLogSource}>
-                <Plus className="h-3 w-3 mr-0.5" />新增日志源
-              </Button>
+        {/* ==== 模块 2：日志源配置（与 Zabbix Host 平级） ==== */}
+        <section className="rounded-lg border bg-card">
+          <header className="flex items-center justify-between px-4 py-3 border-b">
+            <div className="flex items-center gap-2">
+              <div className="h-6 w-6 rounded bg-info/10 flex items-center justify-center">
+                <FileText className="h-3.5 w-3.5 text-info" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold">日志源配置</h4>
+                <p className="text-[11px] text-muted-foreground">
+                  资产级配置，独立于 Zabbix Host；已启用 {logSources.filter((l) => l.enabled).length} / {logSources.length}
+                </p>
+              </div>
             </div>
-            <p className="text-[11px] text-muted-foreground mb-2">
-              日志源作为资产级配置，独立于 Zabbix Host。
-            </p>
-            <div className="rounded-lg border overflow-hidden">
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={addLogSource}>
+              <Plus className="h-3 w-3 mr-0.5" />新增日志源
+            </Button>
+          </header>
+
+          <div className="px-4 py-3">
+            <div className="rounded-md border overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/40 text-xs">
-                    <TableHead className="h-9 w-[160px]">日志名称</TableHead>
+                  <TableRow className="bg-muted/30 text-xs">
+                    <TableHead className="h-9 w-[180px]">日志名称</TableHead>
                     <TableHead className="h-9 w-[110px]">日志类型</TableHead>
                     <TableHead className="h-9">ES 索引 / 过滤条件</TableHead>
                     <TableHead className="h-9 w-[70px]">启用</TableHead>
