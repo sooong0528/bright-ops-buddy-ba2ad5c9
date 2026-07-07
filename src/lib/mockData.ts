@@ -556,7 +556,12 @@ export const abnormalRecords: AbnormalRecord[] = [
   {
     id: "abn-001", taskId: "t1", runId: "run-1024", sourceRunLabel: "主机基础巡检 · #1024",
     assetId: "as1", assetName: "app-svc-01", assetType: "主机", businessSystem: "核心交易系统",
-    metric: "CPU 使用率", level: "异常", value: "92%",
+    metric: "CPU 使用率", currentLevel: "异常", maxLevel: "异常", value: "92%",
+    inspectionHits: [
+      { runId: "run-1020", runLabel: "主机基础巡检 · #1020", time: "2025-04-22 09:12", level: "关注", value: "78%" },
+      { runId: "run-1022", runLabel: "主机基础巡检 · #1022", time: "2025-04-22 09:27", level: "异常", value: "91%" },
+      { runId: "run-1024", runLabel: "主机基础巡检 · #1024", time: "2025-04-22 09:42", level: "异常", value: "92%" },
+    ],
     threshold: ">90% 持续 10 分钟", triggerRule: ">90% 持续 10 分钟",
     time: "2025-04-22 09:42",
     firstSeen: "2025-04-22 09:12", lastSeen: "2025-04-22 09:42", duration: "30 分钟", occurrences: 5,
@@ -571,7 +576,11 @@ export const abnormalRecords: AbnormalRecord[] = [
   {
     id: "abn-002", taskId: "t4", runId: "run-4098", sourceRunLabel: "MQ 周巡检 · #4098",
     assetId: "as3", assetName: "mq-01", assetType: "中间件", businessSystem: "核心交易系统",
-    metric: "Ping/ICMP", level: "异常", value: "超时",
+    metric: "Ping/ICMP", currentLevel: "异常", maxLevel: "异常", value: "超时",
+    inspectionHits: [
+      { runId: "run-4098", runLabel: "MQ 周巡检 · #4098", time: "2025-04-22 10:15", level: "异常", value: "超时" },
+      { runId: "run-4098", runLabel: "MQ 周巡检 · #4098", time: "2025-04-22 10:18", level: "异常", value: "超时" },
+    ],
     threshold: "连续 3 次失败", triggerRule: "连续 3 次 ICMP 探测失败",
     time: "2025-04-22 10:18",
     firstSeen: "2025-04-22 10:15", lastSeen: "2025-04-22 10:18", duration: "3 分钟", occurrences: 3,
@@ -582,7 +591,12 @@ export const abnormalRecords: AbnormalRecord[] = [
   {
     id: "abn-003", taskId: "t2", runId: "run-2008", sourceRunLabel: "数据库日常巡检 · #2008",
     assetId: "as4", assetName: "db-master-01", assetType: "数据库", businessSystem: "核心交易系统",
-    metric: "内存使用率", level: "关注", value: "82%",
+    metric: "内存使用率", currentLevel: "关注", maxLevel: "异常", value: "82%",
+    inspectionHits: [
+      { runId: "run-2004", runLabel: "数据库日常巡检 · #2004", time: "2025-04-22 03:12", level: "关注", value: "76%" },
+      { runId: "run-2006", runLabel: "数据库日常巡检 · #2006", time: "2025-04-22 06:05", level: "异常", value: "91%" },
+      { runId: "run-2008", runLabel: "数据库日常巡检 · #2008", time: "2025-04-22 09:03", level: "关注", value: "82%" },
+    ],
     threshold: "75% ~ 90%", triggerRule: "10 分钟平均值 ≥75%",
     time: "2025-04-22 09:03",
     firstSeen: "2025-04-22 03:12", lastSeen: "2025-04-22 09:03", duration: "5 小时 51 分钟", occurrences: 12,
@@ -593,7 +607,10 @@ export const abnormalRecords: AbnormalRecord[] = [
   {
     id: "abn-004", taskId: "t1", runId: "run-1024", sourceRunLabel: "主机基础巡检 · #1024",
     assetId: "as2", assetName: "app-web-02", assetType: "主机", businessSystem: "官网门户",
-    metric: "CPU 使用率", level: "关注", value: "71%",
+    metric: "CPU 使用率", currentLevel: "关注", maxLevel: "关注", value: "71%",
+    inspectionHits: [
+      { runId: "run-1024", runLabel: "主机基础巡检 · #1024", time: "2025-04-22 10:02", level: "关注", value: "71%" },
+    ],
     threshold: "70% ~ 85%", triggerRule: "10 分钟平均值 ≥70%",
     time: "2025-04-22 10:02",
     firstSeen: "2025-04-22 10:02", lastSeen: "2025-04-22 10:02", duration: "刚刚", occurrences: 1,
@@ -604,7 +621,12 @@ export const abnormalRecords: AbnormalRecord[] = [
   {
     id: "abn-005", taskId: "t3", runId: "run-3005", sourceRunLabel: "从库周巡检 · #3005",
     assetId: "as5", assetName: "db-slave-01", assetType: "数据库", businessSystem: "核心交易系统",
-    metric: "磁盘使用率", level: "关注", value: "68%",
+    metric: "磁盘使用率", currentLevel: "关注", maxLevel: "关注", value: "68%",
+    inspectionHits: [
+      { runId: "run-3001", runLabel: "从库周巡检 · #3001", time: "2025-04-14 07:30", level: "关注", value: "62%" },
+      { runId: "run-3003", runLabel: "从库周巡检 · #3003", time: "2025-04-17 07:30", level: "关注", value: "65%" },
+      { runId: "run-3005", runLabel: "从库周巡检 · #3005", time: "2025-04-21 07:32", level: "关注", value: "68%" },
+    ],
     threshold: "周环比 >+5%", triggerRule: "周环比 >+5%",
     time: "2025-04-21 07:32",
     firstSeen: "2025-04-14 07:30", lastSeen: "2025-04-21 07:32", duration: "7 天", occurrences: 7,
@@ -618,7 +640,11 @@ export const abnormalRecords: AbnormalRecord[] = [
   {
     id: "abn-006", taskId: "t4", runId: "run-4099", sourceRunLabel: "中间件专项巡检 · #4099",
     assetId: "as8", assetName: "rabbitmq-cluster", assetType: "中间件", businessSystem: "核心交易系统",
-    metric: "消息堆积", level: "异常", value: "6800",
+    metric: "消息堆积", currentLevel: "异常", maxLevel: "异常", value: "6800",
+    inspectionHits: [
+      { runId: "run-4097", runLabel: "中间件专项巡检 · #4097", time: "2025-04-22 08:00", level: "关注", value: "3200" },
+      { runId: "run-4099", runLabel: "中间件专项巡检 · #4099", time: "2025-04-22 08:20", level: "异常", value: "6800" },
+    ],
     threshold: "≥5000", triggerRule: "10 分钟内消息堆积 ≥5000",
     time: "2025-04-22 08:20",
     firstSeen: "2025-04-22 08:00", lastSeen: "2025-04-22 08:20", duration: "20 分钟", occurrences: 2,
