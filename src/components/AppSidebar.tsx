@@ -12,6 +12,7 @@ import {
   Boxes,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
+import { useLocation } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -21,12 +22,26 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const mainItems = [
+type SubItem = { title: string; url: string };
+type MainItem = { title: string; url: string; icon: any; children?: SubItem[] };
+
+const mainItems: MainItem[] = [
   { title: "总览驾驶舱", url: "/", icon: LayoutDashboard },
-  { title: "巡检中心", url: "/inspection", icon: ClipboardCheck },
+  {
+    title: "巡检中心",
+    url: "/inspection",
+    icon: ClipboardCheck,
+    children: [
+      { title: "巡检结果", url: "/inspection" },
+      { title: "异常记录", url: "/inspection?tab=abnormal" },
+    ],
+  },
   { title: "故障分析", url: "/analysis", icon: Wrench },
   { title: "智能问答", url: "/assistant", icon: Bot },
   { title: "报告中心", url: "/reports", icon: FileText },
