@@ -176,7 +176,7 @@ export default function AbnormalRecords() {
               filteredRecords.map((r) => (
                 <TableRow key={r.id} className="hover:bg-secondary/40 cursor-pointer" onClick={() => setActiveRecordId(r.id)}>
                   <TableCell>
-                    <StatusBadge tone={r.currentLevel === "异常" ? "destructive" : "warning"} dot={r.currentLevel === "异常"}>
+                    <StatusBadge tone={r.currentLevel === "异常" ? "destructive" : "warning"}>
                       {r.currentLevel}
                     </StatusBadge>
                   </TableCell>
@@ -330,7 +330,7 @@ function RecordDetailSheet({
           <>
             <SheetHeader className="space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <StatusBadge tone={record.currentLevel === "异常" ? "destructive" : "warning"} dot={record.currentLevel === "异常"}>
+                <StatusBadge tone={record.currentLevel === "异常" ? "destructive" : "warning"}>
                   当前 {record.currentLevel}
                 </StatusBadge>
                 <StatusBadge tone={record.maxLevel === "异常" ? "destructive" : "warning"}>
