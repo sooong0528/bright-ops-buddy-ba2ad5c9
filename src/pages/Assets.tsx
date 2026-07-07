@@ -79,8 +79,8 @@ const recommendedMetricsByType: Record<AssetType, RecommendedMetric[]> = {
   ],
 };
 
-// 主机只能关联单个主 Host；其余资产可关联多个
-const isSinglePrimaryHost = (t: AssetType) => t === "主机";
+// 一个资产始终只对应 1 个主 Host；若同一应用部署在多台机器，应分别建为独立资产
+const isSinglePrimaryHost = (_t: AssetType) => true;
 
 type MetricMapping = { metric: string; matchedItems: string[] };
 type LogSourceEntry = { name: string; logType: string; filter: string; enabled: boolean };
