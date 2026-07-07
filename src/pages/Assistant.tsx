@@ -366,7 +366,7 @@ function ComposerBox({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-72">
-            {CATEGORIES.map((c) => {
+            {CATEGORIES.filter((c) => c.key !== "context").map((c) => {
               const CIcon = c.icon;
               const active = c.key === category;
               return (
