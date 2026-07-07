@@ -713,11 +713,15 @@ function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: Ed
 
         <Section title={<span className="flex items-center gap-1.5"><FileText className="h-4 w-4 text-info" />日志观测（Filebeat + ES）</span>}>
           {logSources.length ? (
-            <div className="flex flex-wrap gap-1.5">
-              {logSources.map((s) => (
-                <Badge key={s} variant="secondary" className="text-xs font-mono font-normal">{s}</Badge>
+            <div className="space-y-1.5">
+              {logSources.map((l) => (
+                <div key={l.source} className="flex items-center justify-between rounded-md border bg-card px-2.5 py-1.5">
+                  <span className="text-xs font-mono">{l.source}</span>
+                  <span className="text-[11px] text-muted-foreground">{l.purpose || "未标注用途"}</span>
+                </div>
               ))}
             </div>
+
           ) : (
             <EmptyHint text="尚未配置日志观测源" />
           )}
