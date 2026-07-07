@@ -32,7 +32,7 @@ export default function Analysis() {
     total: abnormalRecords.length,
     pending: abnormalRecords.filter((r) => r.status === "待处理").length,
     analyzing: abnormalRecords.filter((r) => r.status === "分析中").length,
-    closed: abnormalRecords.filter((r) => r.status === "已闭环").length,
+    closed: abnormalRecords.filter((r) => r.status === "已恢复").length,
   }), []);
 
   const handleStart = (r: AbnormalRecord) => {
