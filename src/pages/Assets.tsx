@@ -27,65 +27,119 @@ const assetTypes: AssetType[] = ["主机", "数据库", "应用服务", "中间�
 const environments: Environment[] = ["生产", "预生产", "测试"];
 
 /* ========= 观测配置可选池 ========= */
-const zabbixHostPool = [
-  "app-web-01", "app-web-02", "app-svc-01", "app-svc-02",
-  "db-master-01", "db-slave-01", "cache-01", "mq-01", "gateway-01",
+const zabbixHostPool: { name: string; itemCount: number }[] = [
+  { name: "app-web-01", itemCount: 128 },
+  { name: "app-web-02", itemCount: 126 },
+  { name: "app-svc-01", itemCount: 142 },
+  { name: "app-svc-02", itemCount: 138 },
+  { name: "db-master-01", itemCount: 186 },
+  { name: "db-slave-01", itemCount: 182 },
+  { name: "cache-01", itemCount: 96 },
+  { name: "mq-01", itemCount: 118 },
+  { name: "gateway-01", itemCount: 104 },
 ];
 
-// 每类资产的推荐观测项
-const itemPoolByType: Record<AssetType, string[]> = {
-  主机: ["CPU", "内存", "磁盘", "Ping"],
-  应用服务: ["端口", "HTTP 健康检查", "应用错误日志"],
-  数据库: ["连接数", "慢查询", "锁等待", "数据库日志"],
-  中间件: ["存活状态", "连接数", "队列堆积", "错误日志"],
+type RecommendedMetric = { name: string; description: string; suggestedItems: string[] };
+
+// 每类资产的核心推荐巡检项（含建议匹配的 Zabbix Item key）
+const recommendedMetricsByType: Record<AssetType, RecommendedMetric[]> = {
+  主机: [
+    { name: "CPU 利用率", description: "判断计算资源是否过高", suggestedItems: ["system.cpu.util"] },
+    { name: "内存使用率", description: "判断内存是否紧张", suggestedItems: ["vm.memory.utilization"] },
+    { name: "磁盘使用率", description: "判断磁盘是否快满", suggestedItems: ["vfs.fs.pused[/]", "vfs.fs.pused[/data]"] },
+    { name: "Ping 连通性", description: "判断主机网络是否可达", suggestedItems: ["icmpping"] },
+  ],
+  数据库: [
+    { name: "数据库可用性", description: "MySQL ping / 数据库连通", suggestedItems: ["mysql.ping"] },
+    { name: "端口存活", description: "3306 是否可访问", suggestedItems: ["net.tcp.service[tcp,,3306]"] },
+    { name: "当前连接数", description: "判断连接压力", suggestedItems: ["mysql.threads_connected"] },
+    { name: "最大连接数使用率", description: "判断是否接近连接上限", suggestedItems: ["mysql.max_connections.pused"] },
+    { name: "慢查询数", description: "判断 SQL 性能异常", suggestedItems: ["mysql.slow_queries"] },
+    { name: "主从复制状态", description: "主从场景下判断复制是否中断", suggestedItems: ["mysql.replication.status"] },
+    { name: "主从延迟", description: "主从场景下判断延迟是否过高", suggestedItems: ["mysql.seconds_behind_master"] },
+    { name: "数据盘使用率", description: "判断数据目录磁盘是否快满", suggestedItems: ["vfs.fs.pused[/data]"] },
+  ],
+  应用服务: [
+    { name: "端口存活", description: "服务端口是否可访问", suggestedItems: ["net.tcp.service[tcp,,8080]"] },
+    { name: "HTTP 状态码", description: "健康检查接口是否返回 200", suggestedItems: ["web.page.get[health]"] },
+    { name: "HTTP 响应时间", description: "判断服务响应是否变慢", suggestedItems: ["web.page.perf[health]"] },
+    { name: "进程存活", description: "应用进程是否存在", suggestedItems: ["proc.num[java]"] },
+    { name: "所在主机 CPU 利用率", description: "承载主机 CPU", suggestedItems: ["system.cpu.util"] },
+    { name: "所在主机内存使用率", description: "承载主机内存", suggestedItems: ["vm.memory.utilization"] },
+    { name: "所在主机磁盘使用率", description: "承载主机磁盘", suggestedItems: ["vfs.fs.pused[/]"] },
+  ],
+  中间件: [
+    { name: "服务端口存活", description: "判断中间件是否可访问", suggestedItems: ["net.tcp.service[tcp,,5672]"] },
+    { name: "进程存活", description: "判断进程是否存在", suggestedItems: ["proc.num[mw]"] },
+    { name: "连接数", description: "判断连接压力", suggestedItems: ["mw.connections"] },
+    { name: "内存使用", description: "判断运行内存是否紧张", suggestedItems: ["vm.memory.utilization"] },
+    { name: "磁盘使用率", description: "Kafka、MQ 等尤其重要", suggestedItems: ["vfs.fs.pused[/data]"] },
+    { name: "集群状态", description: "集群类中间件需要", suggestedItems: ["mw.cluster.status"] },
+  ],
 };
 
-// 每类资产的推荐日志源
-const logSourcePoolByType: Record<AssetType, string[]> = {
-  主机: ["es-system-log", "es-syslog"],
-  应用服务: ["es-app-log", "es-nginx-log", "es-error-log"],
-  数据库: ["es-mysql-log", "es-oracle-log", "es-pg-log"],
-  中间件: ["es-mq-log", "es-redis-log", "es-kafka-log"],
-};
+// 主机只能关联单个主 Host；其余资产可关联多个
+const isSinglePrimaryHost = (t: AssetType) => t === "主机";
 
-type LogSourceEntry = { source: string; purpose: string };
+type MetricMapping = { metric: string; matchedItems: string[] };
+type LogSourceEntry = { name: string; logType: string; filter: string; enabled: boolean };
 
 type EditableConfig = {
-  hostItems: Record<string, string[]>;   // host -> selected items
-  logSources: LogSourceEntry[];
+  hostMappings: Record<string, MetricMapping[]>;   // host -> per-metric matched items
+  logSources: LogSourceEntry[];                    // 资产级日志源
 };
 
-// 日志用途候选（用于输入提示 & datalist）
-const logPurposePresets = ["系统日志", "安全日志", "运行日志", "应用日志", "错误日志", "访问日志"];
+const logTypePresets = ["系统日志", "安全日志", "运行日志", "应用日志", "错误日志", "访问日志"];
 
-// 根据日志源名称给一个默认用途，方便初始化
-function guessPurpose(source: string): string {
-  const s = source.toLowerCase();
-  if (s.includes("system") || s.includes("syslog")) return "系统日志";
-  if (s.includes("nginx") || s.includes("access")) return "访问日志";
-  if (s.includes("error")) return "错误日志";
-  if (s.includes("app")) return "应用日志";
-  if (s.includes("mysql") || s.includes("oracle") || s.includes("pg")) return "运行日志";
-  return "运行日志";
+// 每类资产的默认日志源（示例）
+const recommendedLogsByType: Record<AssetType, LogSourceEntry[]> = {
+  主机: [
+    { name: "系统错误日志", logType: "系统日志", filter: "level=ERROR", enabled: true },
+    { name: "OOM / kernel 异常", logType: "系统日志", filter: "oom OR kernel panic OR disk error", enabled: true },
+  ],
+  数据库: [
+    { name: "数据库错误日志", logType: "错误日志", filter: "error OR crash OR aborted OR denied", enabled: true },
+    { name: "慢查询日志", logType: "运行日志", filter: "Query_time OR Lock_time", enabled: true },
+  ],
+  应用服务: [
+    { name: "应用错误日志", logType: "错误日志", filter: "error OR exception OR timeout OR failed", enabled: true },
+    { name: "访问日志", logType: "访问日志", filter: "status:500 OR 502 OR 503 OR 504", enabled: true },
+  ],
+  中间件: [
+    { name: "中间件错误日志", logType: "错误日志", filter: "error OR warning OR timeout OR connection refused", enabled: true },
+  ],
+};
+
+function seedHostMapping(type: AssetType): MetricMapping[] {
+  return recommendedMetricsByType[type].map((m) => ({ metric: m.name, matchedItems: [...m.suggestedItems] }));
 }
 
 function initConfigs(): Record<string, EditableConfig> {
   const init: Record<string, EditableConfig> = {};
   Object.values(observationConfigs).forEach((c) => {
+    const asset = initialAssets.find((a) => a.id === c.assetId);
+    if (!asset) return;
     init[c.assetId] = {
-      hostItems: { [c.zabbixHost]: c.items.map((i) => i.name) },
-      logSources: c.logSources.map((l) => ({ source: l.source, purpose: l.logType || guessPurpose(l.source) })),
+      hostMappings: { [c.zabbixHost]: seedHostMapping(asset.type) },
+      logSources: recommendedLogsByType[asset.type].map((l) => ({ ...l })),
     };
   });
   return init;
 }
 
+function metricStatus(m: MetricMapping): "已匹配" | "未匹配" {
+  return m.matchedItems.length > 0 ? "已匹配" : "未匹配";
+}
+
 function statusOf(cfg?: EditableConfig): Asset["observationStatus"] {
   if (!cfg) return "未配置";
-  const hosts = Object.keys(cfg.hostItems);
-  const itemCount = hosts.reduce((n, h) => n + (cfg.hostItems[h]?.length ?? 0), 0);
-  const hasItems = hosts.length > 0 && itemCount > 0;
-  const hasLogs = (cfg.logSources?.length ?? 0) > 0;
+  const hosts = Object.keys(cfg.hostMappings);
+  const matchedMetricCount = hosts.reduce(
+    (n, h) => n + (cfg.hostMappings[h]?.filter((m) => m.matchedItems.length > 0).length ?? 0),
+    0,
+  );
+  const hasItems = hosts.length > 0 && matchedMetricCount > 0;
+  const hasLogs = (cfg.logSources?.filter((l) => l.enabled).length ?? 0) > 0;
   if (hasItems && hasLogs) return "已配置";
   if (hasItems || hasLogs) return "部分配置";
   return "未配置";
