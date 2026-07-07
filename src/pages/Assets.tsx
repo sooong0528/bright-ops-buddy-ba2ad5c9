@@ -587,9 +587,7 @@ function ObservationEditor({
         <SheetTitle className="text-base">编辑观测配置 · {asset.name}</SheetTitle>
         <p className="text-xs text-muted-foreground font-normal">
           本页用于维护当前资产的数据来源，包括 <span className="text-foreground">Zabbix Host / Item 映射</span> 和 <span className="text-foreground">ES 日志源配置</span>。
-          {singleMode
-            ? " 当前资产为主机，只能关联 1 个主 Host。"
-            : " 当前资产可关联多个 Zabbix Host。"}
+          {" 一个资产只能关联 1 个主 Host；若同一应用部署在多台机器，请分别建为独立资产。"}
         </p>
       </SheetHeader>
 
