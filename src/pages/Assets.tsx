@@ -48,17 +48,33 @@ const logSourcePoolByType: Record<AssetType, string[]> = {
   中间件: ["es-mq-log", "es-redis-log", "es-kafka-log"],
 };
 
+type LogSourceEntry = { source: string; purpose: string };
+
 type EditableConfig = {
   hostItems: Record<string, string[]>;   // host -> selected items
-  logSources: string[];
+  logSources: LogSourceEntry[];
 };
+
+// 日志用途候选（用于输入提示 & datalist）
+const logPurposePresets = ["系统日志", "安全日志", "运行日志", "应用日志", "错误日志", "访问日志"];
+
+// 根据日志源名称给一个默认用途，方便初始化
+function guessPurpose(source: string): string {
+  const s = source.toLowerCase();
+  if (s.includes("system") || s.includes("syslog")) return "系统日志";
+  if (s.includes("nginx") || s.includes("access")) return "访问日志";
+  if (s.includes("error")) return "错误日志";
+  if (s.includes("app")) return "应用日志";
+  if (s.includes("mysql") || s.includes("oracle") || s.includes("pg")) return "运行日志";
+  return "运行日志";
+}
 
 function initConfigs(): Record<string, EditableConfig> {
   const init: Record<string, EditableConfig> = {};
   Object.values(observationConfigs).forEach((c) => {
     init[c.assetId] = {
       hostItems: { [c.zabbixHost]: c.items.map((i) => i.name) },
-      logSources: c.logSources.map((l) => l.source),
+      logSources: c.logSources.map((l) => ({ source: l.source, purpose: l.logType || guessPurpose(l.source) })),
     };
   });
   return init;
@@ -74,6 +90,7 @@ function statusOf(cfg?: EditableConfig): Asset["observationStatus"] {
   if (hasItems || hasLogs) return "部分配置";
   return "未配置";
 }
+
 
 type FormState = Partial<Asset>;
 
