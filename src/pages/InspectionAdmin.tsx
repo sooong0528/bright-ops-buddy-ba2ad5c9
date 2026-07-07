@@ -93,8 +93,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 type ParsedTask = {
   name: string; type: string; schedule: string;
-  metrics: string[]; targets: string[]; owner: string;
-  description: string; reasoning: string;
+  owner: string; description: string; reasoning: string;
+  assetSelections: { assetId: string; metrics: string[] }[];
 };
 type MergeSuggestion = {
   verdict: "merge" | "adjust" | "keep";
@@ -417,16 +417,53 @@ function TaskEditorDialog({
     if (!nlPrompt.trim()) { toast.error("请描述你希望的巡检规则"); return; }
     setNlLoading(true);
     try {
-      const res = await callInspectionAi({ mode: "parse", prompt: nlPrompt });
-      const r = res as ParsedTask;
-      setForm((f) => ({
-        ...f,
-        name: r.name || f.name, type: (r.type as any) || f.type, schedule: r.schedule || f.schedule,
-        owner: r.owner || f.owner, description: r.description || f.description,
+      const assetCatalog = assets.map((a) => ({
+        id: a.id, name: a.name, type: a.type,
+        businessSystem: a.businessSystem, ip: a.ip, environment: a.environment,
       }));
-      setNlReasoning(r.reasoning || "");
+      const res = await callInspectionAi({ mode: "parse", prompt: nlPrompt, assetCatalog });
+      const r = res as ParsedTask;
+
+      // 校验 & 规范化 AI 返回的资源与指标
+      const cleanedSelections: { assetId: string; metrics: string[] }[] = [];
+      const invalidAssetIds: string[] = [];
+      const trimmedMetricsBy: string[] = [];
+      for (const sel of r.assetSelections ?? []) {
+        const asset = assets.find((a) => a.id === sel.assetId);
+        if (!asset) { invalidAssetIds.push(sel.assetId); continue; }
+        const pool = metricPoolByType[asset.type];
+        const validMetrics = (sel.metrics ?? []).filter((m) => pool.includes(m));
+        const finalMetrics = validMetrics.length ? validMetrics : [...pool];
+        if (!validMetrics.length) trimmedMetricsBy.push(asset.name);
+        // 去重合并（若 AI 重复给了同一资源）
+        const existing = cleanedSelections.find((x) => x.assetId === asset.id);
+        if (existing) {
+          existing.metrics = Array.from(new Set([...existing.metrics, ...finalMetrics]));
+        } else {
+          cleanedSelections.push({ assetId: asset.id, metrics: Array.from(new Set(finalMetrics)) });
+        }
+      }
+
+      setForm((f) => syncFlat({
+        ...f,
+        name: r.name || f.name,
+        type: (r.type as any) || f.type,
+        schedule: r.schedule || f.schedule,
+        owner: r.owner || f.owner,
+        description: r.description || f.description,
+        assetSelections: cleanedSelections.length ? cleanedSelections : f.assetSelections,
+      }));
+
+      const notes: string[] = [];
+      if (invalidAssetIds.length) notes.push(`已忽略 ${invalidAssetIds.length} 个未匹配到的资源`);
+      if (trimmedMetricsBy.length) notes.push(`「${trimmedMetricsBy.join("、")}」使用了默认指标`);
+      setNlReasoning([r.reasoning || "", ...notes].filter(Boolean).join("\n"));
       setMergeResult(null);
-      toast.success("已根据描述填充任务基础字段，请在下方选择资源与指标");
+      toast.success(
+        cleanedSelections.length
+          ? `已预填 ${cleanedSelections.length} 个资源，请核对指标后保存`
+          : "已预填基础字段，请手工选择资源与指标",
+      );
       setNlOpen(false);
     } catch (e: any) {
       toast.error(e?.message || "AI 生成失败");
@@ -519,7 +556,7 @@ function TaskEditorDialog({
           )}
 
           {nlReasoning && !nlOpen && (
-            <div className="rounded-md bg-card border p-2.5 text-xs text-muted-foreground">
+            <div className="rounded-md bg-card border p-2.5 text-xs text-muted-foreground whitespace-pre-line">
               <span className="font-medium text-foreground">AI 推断说明：</span>{nlReasoning}
             </div>
           )}

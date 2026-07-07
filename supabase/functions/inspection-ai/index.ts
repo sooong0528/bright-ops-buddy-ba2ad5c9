@@ -1,6 +1,6 @@
 // Edge Function: 巡检任务 AI 助手
 // 支持两种模式：
-//   - mode = "parse"  : 自然语言 -> 巡检任务草稿
+//   - mode = "parse"  : 自然语言 -> 巡检任务草稿（包含 资源 + 每个资源的指标）
 //   - mode = "merge"  : 评估新任务与现有任务的可合并性，给出建议
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
@@ -12,21 +12,16 @@ const corsHeaders = {
 };
 
 const VALID_TYPES = ["日常巡检", "周巡检", "手动巡检"];
-const VALID_METRICS = ["CPU", "内存", "磁盘", "Ping"];
-const VALID_GROUPS = [
-  "全部主机组",
-  "Web 接入层",
-  "应用服务层",
-  "数据库",
-  "缓存层",
-  "消息中间件",
-];
 
 const SYSTEM_PROMPT = `你是企业级智能运维平台的巡检规则助手。
-平台对接的 Zabbix 监控仅提供以下 4 类硬件指标：CPU、内存、磁盘、Ping。
-平台支持的目标主机组固定为：${VALID_GROUPS.join("、")}。
-任务类型仅有：${VALID_TYPES.join("、")}。
-你需要严格按调用方指定的工具结构返回结果，所有字段必须是中文且取值在允许范围内。`;
+平台的巡检任务遵循「先选资源、再选每个资源的指标」的模型：一个任务可以关联多个资源（主机 / 数据库 / 应用服务 / 中间件），每个资源上再独立勾选若干指标。
+每类资源支持的指标集合固定如下：
+- 主机：CPU、内存、磁盘、Ping
+- 应用服务：端口、HTTP 健康检查、应用错误日志
+- 数据库：连接数、慢查询、锁等待、数据库日志
+- 中间件：存活状态、连接数、队列堆积、错误日志
+任务类型只能是：${VALID_TYPES.join("、")}。
+你必须严格按调用方指定的工具结构返回结果，assetId 必须来自调用方给出的资源目录，metrics 只能取该资源类型对应的指标；不允许编造。`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -34,13 +29,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { mode, prompt, draft, existingTasks } = await req.json();
+    const { mode, prompt, draft, existingTasks, assetCatalog } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY 未配置");
 
     let body: Record<string, unknown>;
     if (mode === "parse") {
-      body = buildParseBody(prompt);
+      body = buildParseBody(prompt, assetCatalog ?? []);
     } else if (mode === "merge") {
       body = buildMergeBody(draft, existingTasks);
     } else {
@@ -61,10 +56,7 @@ Deno.serve(async (req) => {
 
     if (!resp.ok) {
       if (resp.status === 429) {
-        return jsonResponse(
-          { error: "请求过于频繁，请稍后再试" },
-          429,
-        );
+        return jsonResponse({ error: "请求过于频繁，请稍后再试" }, 429);
       }
       if (resp.status === 402) {
         return jsonResponse(
@@ -108,17 +100,43 @@ function jsonResponse(payload: unknown, status = 200) {
   });
 }
 
-function buildParseBody(prompt: string) {
+type CatalogAsset = {
+  id: string;
+  name: string;
+  type: string;
+  businessSystem?: string;
+  ip?: string;
+  environment?: string;
+};
+
+function buildParseBody(prompt: string, catalog: CatalogAsset[]) {
+  const catalogText = catalog.length
+    ? catalog
+        .map(
+          (a) =>
+            `- id=${a.id} | ${a.type} | ${a.name} | 业务=${a.businessSystem ?? "-"} | IP=${a.ip ?? "-"} | 环境=${a.environment ?? "-"}`,
+        )
+        .join("\n")
+    : "（当前无可选资源，请返回空的 assetSelections）";
+
   return {
-    model: "google/gemini-3-flash-preview",
+    model: "google/gemini-2.5-flash",
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
         content:
-          `请根据下面的自然语言描述，生成一条巡检任务草稿。\n\n描述：${prompt}\n\n` +
-          `如果描述里没有明确指定，请按业务常识给出合理默认值，并在 reasoning 字段中说明你的推断依据；` +
-          `metrics 与 targets 必须从枚举中选择，无法对应到的需求请在 reasoning 中提示。`,
+          `请根据下面的自然语言描述，生成一条巡检任务草稿，并从资源目录中挑选合适的资源、为每个资源选择要巡检的指标。\n\n` +
+          `【资源目录】\n${catalogText}\n\n` +
+          `【用户描述】${prompt}\n\n` +
+          `要求：\n` +
+          `1. assetSelections 中的 assetId 必须严格来自资源目录中的 id；不要编造。\n` +
+          `2. 每个资源的 metrics 必须取该资源类型对应的合法指标：\n` +
+          `   主机→CPU/内存/磁盘/Ping；应用服务→端口/HTTP 健康检查/应用错误日志；\n` +
+          `   数据库→连接数/慢查询/锁等待/数据库日志；中间件→存活状态/连接数/队列堆积/错误日志。\n` +
+          `3. 若描述指向"某类资源"（如"所有数据库"），则从目录中选出全部匹配项。\n` +
+          `4. 若描述没有明确指定指标，就按该资源类型的常用指标合理默认。\n` +
+          `5. 在 reasoning 中简要说明：为什么选这些资源、为什么选这些指标、以及调度/负责人是怎么推断的。`,
       },
     ],
     tools: [
@@ -126,7 +144,7 @@ function buildParseBody(prompt: string) {
         type: "function",
         function: {
           name: "create_inspection_task",
-          description: "根据自然语言生成一条巡检任务草稿",
+          description: "生成一条巡检任务草稿，包含资源与每个资源上的指标",
           parameters: {
             type: "object",
             properties: {
@@ -136,16 +154,27 @@ function buildParseBody(prompt: string) {
                 type: "string",
                 description: "调度策略，例如 '每日 08:00' / '每 30 分钟'",
               },
-              metrics: {
-                type: "array",
-                items: { type: "string", enum: VALID_METRICS },
+              owner: {
+                type: "string",
+                description: "建议的负责人，未提及时填 '运维组'",
               },
-              targets: {
-                type: "array",
-                items: { type: "string", enum: VALID_GROUPS },
-              },
-              owner: { type: "string", description: "建议的负责人，未提及时填 '运维组'" },
               description: { type: "string", description: "任务说明 / 业务背景" },
+              assetSelections: {
+                type: "array",
+                description: "选中的资源及其指标；assetId 必须来自给定资源目录",
+                items: {
+                  type: "object",
+                  properties: {
+                    assetId: { type: "string" },
+                    metrics: {
+                      type: "array",
+                      items: { type: "string" },
+                    },
+                  },
+                  required: ["assetId", "metrics"],
+                  additionalProperties: false,
+                },
+              },
               reasoning: {
                 type: "string",
                 description: "字段推断依据，向用户解释 AI 的判断",
@@ -155,10 +184,9 @@ function buildParseBody(prompt: string) {
               "name",
               "type",
               "schedule",
-              "metrics",
-              "targets",
               "owner",
               "description",
+              "assetSelections",
               "reasoning",
             ],
             additionalProperties: false,
@@ -175,7 +203,7 @@ function buildParseBody(prompt: string) {
 
 function buildMergeBody(draft: unknown, existingTasks: unknown) {
   return {
-    model: "google/gemini-3-flash-preview",
+    model: "google/gemini-2.5-flash",
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       {
@@ -208,19 +236,12 @@ function buildMergeBody(draft: unknown, existingTasks: unknown) {
               },
               suggestedTask: {
                 type: "object",
-                description: "建议保留 / 合并后的任务字段；若 verdict=keep，可与 DRAFT 一致",
                 properties: {
                   name: { type: "string" },
                   type: { type: "string", enum: VALID_TYPES },
                   schedule: { type: "string" },
-                  metrics: {
-                    type: "array",
-                    items: { type: "string", enum: VALID_METRICS },
-                  },
-                  targets: {
-                    type: "array",
-                    items: { type: "string", enum: VALID_GROUPS },
-                  },
+                  metrics: { type: "array", items: { type: "string" } },
+                  targets: { type: "array", items: { type: "string" } },
                   description: { type: "string" },
                 },
                 required: [
@@ -233,12 +254,8 @@ function buildMergeBody(draft: unknown, existingTasks: unknown) {
                 ],
                 additionalProperties: false,
               },
-              reasoning: { type: "string", description: "判断依据，逐条说明" },
-              risks: {
-                type: "array",
-                items: { type: "string" },
-                description: "潜在风险或注意事项",
-              },
+              reasoning: { type: "string" },
+              risks: { type: "array", items: { type: "string" } },
             },
             required: [
               "verdict",
