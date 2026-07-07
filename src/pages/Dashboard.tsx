@@ -137,7 +137,7 @@ export default function Dashboard() {
                   </div>
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{r.description}</p>
                 </div>
-                <StatusBadge tone={r.status === "已闭环" ? "success" : r.status === "分析中" ? "info" : "warning"}>
+                <StatusBadge tone={r.status === "已恢复" ? "success" : r.status === "分析中" ? "info" : r.status === "已忽略" ? "muted" : "warning"}>
                   {r.status}
                 </StatusBadge>
                 <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />

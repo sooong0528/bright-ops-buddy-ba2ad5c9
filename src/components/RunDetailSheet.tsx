@@ -6,10 +6,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
-import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
-import { Clock, User as UserIcon, Calendar, ListChecks, AlertTriangle, AlertCircle, CheckCircle2, Target, Wrench, MessageSquare } from "lucide-react";
+import { Clock, User as UserIcon, Calendar, ListChecks, AlertTriangle, AlertCircle, CheckCircle2, Target } from "lucide-react";
 import {
   assets,
   hosts,
@@ -89,24 +86,6 @@ export function RunDetailSheet({ run, task, onClose }: Props) {
   const scopedAssets = run && task ? resolveScopedAssets(task) : [];
   const enabledItems = (task?.checkItems ?? []).filter((i) => i.enabled);
 
-  const navigate = useNavigate();
-
-  const startAnalysis = (assetName: string, itemName: string, value: string, level: string) => {
-    toast({ title: "已发起故障分析", description: `${assetName} · ${itemName} · ${value}` });
-    sessionStorage.setItem("analysis.pendingContext", JSON.stringify({
-      assetName, itemName, value, level, runId: run?.id, taskName: task?.name,
-    }));
-    navigate("/analysis");
-  };
-
-  const askInAssistant = (assetName: string, itemName: string, value: string, level: string) => {
-    sessionStorage.setItem("assistant.pendingReportContext", JSON.stringify({
-      id: `${run?.id}-${assetName}-${itemName}`,
-      title: `${assetName} · ${itemName}（${level} ${value}）`,
-      type: "巡检异常追问",
-    }));
-    navigate("/assistant");
-  };
 
   return (
     <Sheet open={!!run} onOpenChange={(v) => !v && onClose()}>
@@ -197,24 +176,6 @@ export function RunDetailSheet({ run, task, onClose }: Props) {
                                         <span className="text-xs font-medium truncate">{item.name}</span>
                                         <span className="text-xs tabular-nums text-foreground">{value}</span>
                                         <StatusBadge tone={tone}>{level}</StatusBadge>
-                                        <div className="ml-auto flex items-center gap-1">
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-6 px-2 text-xs"
-                                            onClick={() => startAnalysis(a.name, item.name, value, level)}
-                                          >
-                                            <Wrench className="h-3 w-3 mr-1" />故障分析
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-6 px-2 text-xs"
-                                            onClick={() => askInAssistant(a.name, item.name, value, level)}
-                                          >
-                                            <MessageSquare className="h-3 w-3 mr-1" />追问
-                                          </Button>
-                                        </div>
                                       </div>
                                     );
                                   })}
