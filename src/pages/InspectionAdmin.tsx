@@ -556,7 +556,7 @@ function TaskEditorDialog({
           )}
 
           {nlReasoning && !nlOpen && (
-            <div className="rounded-md bg-card border p-2.5 text-xs text-muted-foreground">
+            <div className="rounded-md bg-card border p-2.5 text-xs text-muted-foreground whitespace-pre-line">
               <span className="font-medium text-foreground">AI 推断说明：</span>{nlReasoning}
             </div>
           )}
