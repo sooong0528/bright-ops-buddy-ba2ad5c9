@@ -143,7 +143,7 @@ export default function Inspection() {
     // no-op: handled by URL
   }, [location.search]);
 
-  // 待关注事项列表：合并 abnormalRecords（level=异常/关注）
+  // 异常/关注记录列表：合并 abnormalRecords（level=异常/关注）
   const filteredRecords = useMemo(() => {
     return abnormalRecords.filter((r) => {
       if (levelFilter !== "all" && r.level !== levelFilter) return false;
@@ -179,7 +179,7 @@ export default function Inspection() {
           <TabsList>
             <TabsTrigger value="results">巡检结果</TabsTrigger>
             <TabsTrigger value="abnormal">
-              待关注事项
+              异常/关注记录
               <span className="ml-1.5 text-xs text-muted-foreground tabular-nums">{abnormalRecords.length}</span>
             </TabsTrigger>
           </TabsList>
@@ -287,11 +287,11 @@ export default function Inspection() {
           </div>
         </div>
       ) : (
-        /* ============ 待关注事项视图 ============ */
+        /* ============ 异常/关注记录视图 ============ */
         <div className="panel">
           <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-3">
             <div>
-              <h3 className="font-semibold">待关注事项</h3>
+              <h3 className="font-semibold">异常/关注记录</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
                 汇集巡检发现的「异常」与「关注」记录 · 支持发起故障分析或提问助手
               </p>
@@ -343,7 +343,7 @@ export default function Inspection() {
               {filteredRecords.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="py-12 text-center text-sm text-muted-foreground">
-                    暂无匹配的待关注事项
+                    暂无匹配的异常/关注记录
                   </TableCell>
                 </TableRow>
               ) : (
@@ -393,7 +393,7 @@ export default function Inspection() {
           </Table>
 
           <div className="flex items-center justify-between px-5 py-3 border-t bg-muted/20 text-xs text-muted-foreground">
-            <span>共 {filteredRecords.length} 条待关注事项</span>
+            <span>共 {filteredRecords.length} 条异常/关注记录</span>
             <span>异常 {abnormalCount} · 关注 {attentionCount}</span>
           </div>
         </div>
