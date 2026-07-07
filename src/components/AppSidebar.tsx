@@ -34,7 +34,7 @@ const mainItems = [
 
 const manageItems = [
   { title: "资产管理", url: "/assets", icon: Boxes },
-  { title: "巡检配置", url: "/inspection-admin", icon: Settings2 },
+  { title: "巡检管理", url: "/inspection-admin", icon: Settings2 },
   { title: "知识库管理", url: "/knowledge", icon: BookOpen },
   { title: "用户与权限", url: "/users", icon: Users },
   { title: "审计留痕", url: "/audit", icon: ScrollText },
