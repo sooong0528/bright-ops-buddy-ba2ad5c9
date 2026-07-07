@@ -39,7 +39,7 @@ const mainItems: MainItem[] = [
     icon: ClipboardCheck,
     children: [
       { title: "巡检结果", url: "/inspection" },
-      { title: "异常记录", url: "/inspection?tab=abnormal" },
+      { title: "异常记录", url: "/inspection/abnormal" },
     ],
   },
   { title: "故障分析", url: "/analysis", icon: Wrench },
