@@ -566,7 +566,7 @@ function generateReply(q: string, category: CategoryKey, ctx?: ContextRef): Msg 
         { label: "异常项数量", value: "16 → 12（↓25%）" },
         { label: "关注项数量", value: "8 → 11（↑37%）", tone: "warn" },
         { label: "新增关注对象", value: "core-sw-01 端口抖动", tone: "danger" },
-        { label: "已闭环项", value: "redis-01 内存泄漏" },
+        { label: "已恢复项", value: "redis-01 内存泄漏" },
       ],
     };
   }
