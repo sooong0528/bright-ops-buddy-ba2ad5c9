@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   PlayCircle,
@@ -16,12 +16,15 @@ import {
   Sparkles,
   Wand2,
   Loader2,
-  GitMerge,
   Lightbulb,
   X,
   ExternalLink,
-  ChevronLeft,
-  ChevronRight,
+  Search,
+  ClipboardList,
+  Target,
+  Bell,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,14 +38,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -76,34 +71,23 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
-import { JudgmentRulesPanel } from "@/components/JudgmentRulesPanel";
 import {
   inspectionTasks as initialTasks,
   inspectionRuns as initialRuns,
   assets,
+  observationConfigs,
+  defaultCheckItemsByAssetType,
   type Asset,
   type AssetType,
+  type Environment,
   type InspectionTask,
   type InspectionRun,
+  type CheckItemConfig,
+  type SchemeScopeType,
 } from "@/lib/mockData";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-
-type ParsedTask = {
-  name: string; type: string; schedule: string;
-  owner: string; description: string; reasoning: string;
-  assetSelections: { assetId: string; metrics: string[] }[];
-};
-type MergeSuggestion = {
-  verdict: "merge" | "adjust" | "keep";
-  summary: string;
-  mergeIntoTaskId: string;
-  suggestedTask: { name: string; type: string; schedule: string; metrics: string[]; targets: string[]; description: string };
-  reasoning: string;
-  risks: string[];
-};
 
 async function callInspectionAi(payload: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("inspection-ai", { body: payload });
@@ -115,13 +99,40 @@ async function callInspectionAi(payload: Record<string, unknown>) {
   return (data as any).result;
 }
 
-// 每类资源的可选指标池（与 资产管理 观测项保持一致）
-const metricPoolByType: Record<AssetType, string[]> = {
-  主机: ["CPU", "内存", "磁盘", "Ping"],
-  应用服务: ["端口", "HTTP 健康检查", "应用错误日志"],
-  数据库: ["连接数", "慢查询", "锁等待", "数据库日志"],
-  中间件: ["存活状态", "连接数", "队列堆积", "错误日志"],
+const ASSET_TYPES: AssetType[] = ["主机", "应用服务", "数据库", "中间件"];
+const ENVIRONMENTS: Environment[] = ["生产", "预生产", "测试"];
+
+const ITEM_KEY_TO_ZBX: Record<string, string[]> = {
+  cpu: ["system.cpu.util"],
+  mem: ["vm.memory.utilization"],
+  disk: ["vfs.fs.pused"],
+  data_disk: ["vfs.fs.pused"],
+  ping: ["icmpping"],
+  agent: ["agent.ping"],
+  port: ["net.tcp.service"],
+  http_status: ["web.page.get"],
+  http_rt: ["web.page.perf"],
+  proc: ["proc.num"],
+  conn: ["mysql.status[Threads_connected]", "redis.connected_clients"],
+  slow_sql: ["mysql.slow_queries"],
+  db_avail: ["mysql.ping"],
+  repl_lag: ["mysql.replication_lag"],
+  queue_lag: ["rabbitmq.queue.messages"],
+  app_err_log: [],
+  access_5xx: [],
+  err_log: [],
 };
+
+/** 一个资产对某个巡检项是否已在观测配置中映射 */
+function assetHasItem(asset: Asset, item: CheckItemConfig): "matched" | "unmatched" | "log" {
+  const isLog = ["app_err_log", "access_5xx", "err_log"].includes(item.key);
+  const cfg = observationConfigs[asset.id];
+  if (isLog) return cfg && cfg.logSources.length > 0 ? "matched" : "unmatched";
+  const zbxKeys = ITEM_KEY_TO_ZBX[item.key] ?? [];
+  if (!cfg) return "unmatched";
+  const has = cfg.items.some((it) => zbxKeys.some((k) => it.key.startsWith(k)));
+  return has ? "matched" : "unmatched";
+}
 
 export default function InspectionAdmin() {
   const navigate = useNavigate();
@@ -132,11 +143,30 @@ export default function InspectionAdmin() {
   const [editingTask, setEditingTask] = useState<InspectionTask | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"tasks" | "rules">("tasks");
-  const [ruleCreateSignal, setRuleCreateSignal] = useState(0);
 
+  // 筛选
+  const [filterType, setFilterType] = useState<"全部" | AssetType>("全部");
+  const [filterSystem, setFilterSystem] = useState<string>("全部");
+  const [filterEnabled, setFilterEnabled] = useState<"全部" | "启用" | "停用">("全部");
+  const [keyword, setKeyword] = useState("");
+
+  const businessSystems = useMemo(
+    () => Array.from(new Set(assets.map((a) => a.businessSystem))),
+    [],
+  );
 
   const detailTask = tasks.find((t) => t.id === detailTaskId) || null;
+
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      if (filterType !== "全部" && t.appliesTo && t.appliesTo !== filterType) return false;
+      if (filterSystem !== "全部" && !(t.businessSystems ?? []).includes(filterSystem) && t.scopeType !== "全部") return false;
+      if (filterEnabled === "启用" && !t.enabled) return false;
+      if (filterEnabled === "停用" && t.enabled) return false;
+      if (keyword && !t.name.includes(keyword)) return false;
+      return true;
+    });
+  }, [tasks, filterType, filterSystem, filterEnabled, keyword]);
 
   function openCreate() { setEditingTask(null); setEditorOpen(true); }
   function openEdit(t: InspectionTask) { setEditingTask(t); setEditorOpen(true); }
@@ -144,11 +174,14 @@ export default function InspectionAdmin() {
   function handleSave(data: InspectionTask) {
     if (editingTask) {
       setTasks((prev) => prev.map((t) => (t.id === editingTask.id ? { ...t, ...data, id: editingTask.id } : t)));
-      toast.success("巡检任务已更新");
+      toast.success("巡检方案已更新");
     } else {
-      const id = "t" + (Math.random().toString(36).slice(2, 7));
-      setTasks((prev) => [{ ...data, id, lastRun: "—", status: "待运行", normal: 0, attention: 0, abnormal: 0, createdAt: new Date().toISOString().slice(0, 10) }, ...prev]);
-      toast.success("巡检任务已创建");
+      const id = "t" + Math.random().toString(36).slice(2, 7);
+      setTasks((prev) => [
+        { ...data, id, lastRun: "—", status: "待运行", normal: 0, attention: 0, abnormal: 0, createdAt: new Date().toISOString().slice(0, 10), lastResult: "—" },
+        ...prev,
+      ]);
+      toast.success("巡检方案已创建");
     }
     setEditorOpen(false);
   }
@@ -156,13 +189,13 @@ export default function InspectionAdmin() {
     if (!deleteId) return;
     setTasks((prev) => prev.filter((t) => t.id !== deleteId));
     setRuns((prev) => prev.filter((r) => r.taskId !== deleteId));
-    toast.success("巡检任务已删除");
+    toast.success("巡检方案已删除");
     if (detailTaskId === deleteId) setDetailTaskId(null);
     setDeleteId(null);
   }
   function toggleEnabled(t: InspectionTask) {
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, enabled: !x.enabled } : x)));
-    toast.success(t.enabled ? "已停用任务" : "已启用任务");
+    toast.success(t.enabled ? "已停用" : "已启用");
   }
   function runNow(t: InspectionTask) {
     const id = "run-" + Math.floor(Math.random() * 9000 + 1000);
@@ -177,126 +210,161 @@ export default function InspectionAdmin() {
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: "运行中", lastRun: fmt } : x)));
     toast.success(`已触发 "${t.name}"`);
   }
-
   function gotoRunDetail(runId: string) {
     navigate(`/inspection?run=${encodeURIComponent(runId)}`);
   }
 
   return (
     <div className="space-y-4">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "tasks" | "rules")} className="space-y-4">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <TabsList>
-            <TabsTrigger value="tasks">巡检任务</TabsTrigger>
-            <TabsTrigger value="rules">巡检判定规则</TabsTrigger>
-          </TabsList>
-          {activeTab === "tasks" ? (
-            <Button className="bg-primary" onClick={openCreate}>
-              <Plus className="h-4 w-4 mr-2" />新建巡检任务
-            </Button>
-          ) : (
-            <Button className="bg-primary" onClick={() => setRuleCreateSignal((v) => v + 1)}>
-              <Plus className="h-4 w-4 mr-2" />新增指标规则
-            </Button>
-          )}
+      {/* 筛选栏 + 新建 */}
+      <div className="panel p-4 flex flex-wrap items-center gap-3">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input value={keyword} onChange={(e) => setKeyword(e.target.value)}
+            placeholder="搜索方案名称" className="h-9 w-56 pl-8" />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">资产类型</span>
+          <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
+            <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="全部">全部</SelectItem>
+              {ASSET_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">业务系统</span>
+          <Select value={filterSystem} onValueChange={setFilterSystem}>
+            <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="全部">全部</SelectItem>
+              {businessSystems.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">状态</span>
+          <Select value={filterEnabled} onValueChange={(v: any) => setFilterEnabled(v)}>
+            <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="全部">全部</SelectItem>
+              <SelectItem value="启用">启用</SelectItem>
+              <SelectItem value="停用">停用</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="ml-auto">
+          <Button className="bg-primary" onClick={openCreate}>
+            <Plus className="h-4 w-4 mr-2" />新增巡检方案
+          </Button>
+        </div>
+      </div>
+
+      {/* 列表 */}
+      <div className="panel">
+        <div className="flex items-center justify-between p-5 pb-3">
+          <div>
+            <h3 className="font-semibold">巡检方案</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              点击方案名查看详情与历史执行；每个方案面向一类资产，配置巡检范围、巡检项与异常阈值。
+            </p>
+          </div>
         </div>
 
-        <TabsContent value="tasks" className="space-y-4 mt-0">
-          <div className="panel">
-            <div className="flex items-center justify-between p-5 pb-3">
-              <div>
-                <h3 className="font-semibold">巡检任务</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">点击任务名查看任务详情与历史执行；可跳转到具体一次巡检结果</p>
-              </div>
-            </div>
-
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>任务名称</TableHead>
-                  <TableHead>类型</TableHead>
-                  <TableHead>调度</TableHead>
-                  <TableHead>巡检指标</TableHead>
-                  <TableHead>负责人</TableHead>
-                  <TableHead>最近执行</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>方案名称</TableHead>
+              <TableHead>适用资产类型</TableHead>
+              <TableHead>巡检范围</TableHead>
+              <TableHead>巡检项</TableHead>
+              <TableHead>巡检频率</TableHead>
+              <TableHead>状态</TableHead>
+              <TableHead>最近执行</TableHead>
+              <TableHead>最近结果</TableHead>
+              <TableHead className="text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredTasks.map((t) => {
+              const scope = summarizeScope(t);
+              const itemCount = (t.checkItems ?? []).filter((i) => i.enabled).length
+                || t.metrics.length;
+              const freq = t.frequency || t.schedule;
+              return (
+                <TableRow key={t.id} className="hover:bg-secondary/40">
+                  <TableCell>
+                    <button
+                      className="font-medium text-left hover:text-primary transition-colors"
+                      onClick={() => setDetailTaskId(t.id)}
+                    >
+                      {t.name}
+                    </button>
+                    {!t.enabled && <span className="ml-2 text-xs text-muted-foreground">(已停用)</span>}
+                  </TableCell>
+                  <TableCell><StatusBadge tone="info">{t.appliesTo ?? "—"}</StatusBadge></TableCell>
+                  <TableCell className="text-sm text-muted-foreground max-w-[220px] truncate" title={scope}>{scope}</TableCell>
+                  <TableCell className="text-sm tabular-nums">{itemCount} 项</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{freq}</TableCell>
+                  <TableCell>
+                    <StatusBadge tone={t.enabled ? "success" : "muted"}>{t.enabled ? "启用" : "停用"}</StatusBadge>
+                  </TableCell>
+                  <TableCell className="text-sm tabular-nums text-muted-foreground">{t.lastRun}</TableCell>
+                  <TableCell>
+                    <StatusBadge tone={statusTone(t.lastResult || (t.abnormal > 0 ? "异常" : t.attention > 0 ? "关注" : "正常"))}>
+                      {t.lastResult || (t.abnormal > 0 ? "异常" : t.attention > 0 ? "关注" : "正常")}
+                    </StatusBadge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => runNow(t)} disabled={!t.enabled}>
+                        <PlayCircle className="h-4 w-4 mr-1" />执行
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem onClick={() => setDetailTaskId(t.id)}>
+                            <History className="h-4 w-4 mr-2" />查看详情
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEdit(t)}>
+                            <Pencil className="h-4 w-4 mr-2" />编辑
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => toggleEnabled(t)}>
+                            {t.enabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
+                            {t.enabled ? "停用" : "启用"}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteId(t.id)}>
+                            <Trash2 className="h-4 w-4 mr-2" />删除
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tasks.map((t) => (
-                  <TableRow key={t.id} className="hover:bg-secondary/40">
-                    <TableCell>
-                      <button
-                        className="font-medium text-left hover:text-primary transition-colors"
-                        onClick={() => setDetailTaskId(t.id)}
-                      >
-                        {t.name}
-                      </button>
-                      {!t.enabled && <span className="ml-2 text-xs text-muted-foreground">(已停用)</span>}
-                    </TableCell>
-                    <TableCell><StatusBadge tone="info">{t.type}</StatusBadge></TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{t.schedule}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {t.metrics.map((m) => (
-                          <span key={m} className="text-xs rounded bg-secondary px-1.5 py-0.5 text-muted-foreground">{m}</span>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{t.owner}</TableCell>
-                    <TableCell className="text-sm tabular-nums text-muted-foreground">{t.lastRun}</TableCell>
-                    <TableCell>
-                      <StatusBadge tone={statusTone(t.status)} dot={t.status === "运行中"}>{t.status}</StatusBadge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => runNow(t)} disabled={!t.enabled}>
-                          <PlayCircle className="h-4 w-4 mr-1" />执行
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-40">
-                            <DropdownMenuItem onClick={() => setDetailTaskId(t.id)}>
-                              <History className="h-4 w-4 mr-2" />查看详情
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(t)}>
-                              <Pencil className="h-4 w-4 mr-2" />编辑
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleEnabled(t)}>
-                              {t.enabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
-                              {t.enabled ? "停用" : "启用"}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteId(t.id)}>
-                              <Trash2 className="h-4 w-4 mr-2" />删除
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </TabsContent>
+              );
+            })}
+            {filteredTasks.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-10">
+                  无匹配的巡检方案
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
-        <TabsContent value="rules" className="mt-0">
-          <JudgmentRulesPanel createSignal={ruleCreateSignal} />
-        </TabsContent>
-      </Tabs>
-
-      <TaskEditorDialog
+      <SchemeEditorSheet
         open={editorOpen}
         onOpenChange={setEditorOpen}
         task={editingTask}
         onSave={handleSave}
-        existingTasks={tasks}
       />
 
       <TaskDetailSheet
@@ -311,9 +379,9 @@ export default function InspectionAdmin() {
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除该巡检任务？</AlertDialogTitle>
+            <AlertDialogTitle>删除该巡检方案？</AlertDialogTitle>
             <AlertDialogDescription>
-              删除后该任务及其全部执行历史将被移除，此操作不可撤销。
+              删除后方案及其执行历史将被移除，此操作不可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -328,93 +396,151 @@ export default function InspectionAdmin() {
   );
 }
 
-/* ---------------- 任务编辑器 ---------------- */
+function summarizeScope(t: InspectionTask): string {
+  const type = t.appliesTo ?? "";
+  if (!t.scopeType) return t.targets.slice(0, 3).join("、") || "—";
+  if (t.scopeType === "全部") return `全部${type}资产`;
+  if (t.scopeType === "指定业务系统") return `业务系统：${(t.businessSystems ?? []).join("、") || "未选"}`;
+  return `指定资产：${(t.assetIds ?? []).length} 个`;
+}
 
-function TaskEditorDialog({
-  open, onOpenChange, task, onSave, existingTasks,
+/* ---------------- 巡检方案编辑器 ---------------- */
+
+function emptyScheme(): InspectionTask {
+  return {
+    id: "", name: "", type: "日常巡检", schedule: "每日 09:00",
+    lastRun: "—", status: "待运行", normal: 0, attention: 0, abnormal: 0,
+    description: "",
+    assetSelections: [], targets: [], metrics: [],
+    enabled: true, owner: "李管理", createdAt: new Date().toISOString().slice(0, 10),
+    appliesTo: "主机",
+    scopeType: "全部",
+    businessSystems: [],
+    environments: ["生产"],
+    assetIds: [],
+    checkItems: JSON.parse(JSON.stringify(defaultCheckItemsByAssetType["主机"])) as CheckItemConfig[],
+    scheduleMode: "定时",
+    frequency: "每 5 分钟",
+    runAt: "",
+    notifyMode: "不通知",
+    notifyChannels: [],
+    generateReport: true,
+    lastResult: "—",
+  };
+}
+
+function SchemeEditorSheet({
+  open, onOpenChange, task, onSave,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   task: InspectionTask | null;
   onSave: (data: InspectionTask) => void;
-  existingTasks: InspectionTask[];
 }) {
   const isEdit = !!task;
-  const [form, setForm] = useState<InspectionTask>(() => emptyForm());
+  const [form, setForm] = useState<InspectionTask>(() => emptyScheme());
   const [nlOpen, setNlOpen] = useState(false);
   const [nlPrompt, setNlPrompt] = useState("");
   const [nlLoading, setNlLoading] = useState(false);
   const [nlReasoning, setNlReasoning] = useState<string>("");
-  const [mergeLoading, setMergeLoading] = useState(false);
-  const [mergeResult, setMergeResult] = useState<MergeSuggestion | null>(null);
 
-  useMemo(() => {
-    if (open) {
-      setForm(task ? { ...task } : emptyForm());
-      setNlReasoning("");
-      setMergeResult(null);
+  useEffect(() => {
+    if (!open) return;
+    if (task) {
+      // 补齐可能缺失的方案字段
+      const seed = emptyScheme();
+      const merged: InspectionTask = {
+        ...seed,
+        ...task,
+        appliesTo: task.appliesTo ?? seed.appliesTo,
+        scopeType: task.scopeType ?? seed.scopeType,
+        checkItems: task.checkItems ?? JSON.parse(JSON.stringify(defaultCheckItemsByAssetType[task.appliesTo ?? "主机"])),
+      };
+      setForm(merged);
+    } else {
+      setForm(emptyScheme());
     }
+    setNlReasoning("");
+    setNlOpen(false);
+    setNlPrompt("");
   }, [open, task]);
 
-  function emptyForm(): InspectionTask {
-    return {
-      id: "", name: "", type: "日常巡检", schedule: "每日 08:00",
-      lastRun: "—", status: "待运行", normal: 0, attention: 0, abnormal: 0,
-      description: "", assetSelections: [], targets: [], metrics: [],
-      enabled: true, owner: "李管理", createdAt: new Date().toISOString().slice(0, 10),
-    };
+  // 切换适用资产类型 → 重置巡检项 & 已选资产
+  function changeAppliesTo(t: AssetType) {
+    setForm((f) => ({
+      ...f,
+      appliesTo: t,
+      checkItems: JSON.parse(JSON.stringify(defaultCheckItemsByAssetType[t])) as CheckItemConfig[],
+      assetIds: [],
+    }));
   }
 
-  // 已选资源 & 每个资源上勾选的指标（关联关系明确存储）
-  const selectedAssetIds = form.assetSelections.map((s) => s.assetId);
+  // 命中资产
+  const hitAssets = useMemo(() => {
+    if (!form.appliesTo) return [];
+    let list = assets.filter((a) => a.type === form.appliesTo);
+    if (form.environments && form.environments.length) {
+      list = list.filter((a) => form.environments!.includes(a.environment));
+    }
+    if (form.scopeType === "指定业务系统") {
+      list = list.filter((a) => (form.businessSystems ?? []).includes(a.businessSystem));
+    }
+    if (form.scopeType === "指定资产") {
+      list = list.filter((a) => (form.assetIds ?? []).includes(a.id));
+    }
+    return list;
+  }, [form.appliesTo, form.scopeType, form.businessSystems, form.assetIds, form.environments]);
 
-  function toggleAsset(a: Asset) {
+  const uncoveredAssets = useMemo(
+    () => hitAssets.filter((a) => a.observationStatus !== "已配置"),
+    [hitAssets],
+  );
+
+  const enabledItems = (form.checkItems ?? []).filter((i) => i.enabled);
+
+  const businessSystemsOfType = useMemo(
+    () => Array.from(new Set(assets.filter((a) => a.type === form.appliesTo).map((a) => a.businessSystem))),
+    [form.appliesTo],
+  );
+
+  const assetsOfType = useMemo(
+    () => assets.filter((a) => a.type === form.appliesTo),
+    [form.appliesTo],
+  );
+
+  function toggleBusinessSystem(sys: string) {
     setForm((f) => {
-      const exists = f.assetSelections.find((s) => s.assetId === a.id);
-      let next;
-      if (exists) {
-        next = f.assetSelections.filter((s) => s.assetId !== a.id);
-      } else {
-        // 默认勾选该资源类型下的全部推荐指标
-        next = [...f.assetSelections, { assetId: a.id, metrics: [...metricPoolByType[a.type]] }];
-      }
-      return syncFlat({ ...f, assetSelections: next });
+      const list = new Set(f.businessSystems ?? []);
+      if (list.has(sys)) list.delete(sys); else list.add(sys);
+      return { ...f, businessSystems: [...list] };
     });
   }
 
-  function toggleAssetMetric(assetId: string, metric: string) {
+  function toggleAssetId(id: string) {
     setForm((f) => {
-      const next = f.assetSelections.map((s) => {
-        if (s.assetId !== assetId) return s;
-        const has = s.metrics.includes(metric);
-        return { ...s, metrics: has ? s.metrics.filter((m) => m !== metric) : [...s.metrics, metric] };
-      });
-      return syncFlat({ ...f, assetSelections: next });
+      const list = new Set(f.assetIds ?? []);
+      if (list.has(id)) list.delete(id); else list.add(id);
+      return { ...f, assetIds: [...list] };
     });
   }
 
-  function setAssetMetricsAll(assetId: string, checked: boolean) {
+  function toggleEnv(env: Environment) {
     setForm((f) => {
-      const next = f.assetSelections.map((s) => {
-        if (s.assetId !== assetId) return s;
-        const a = assets.find((x) => x.id === assetId);
-        return { ...s, metrics: checked && a ? [...metricPoolByType[a.type]] : [] };
-      });
-      return syncFlat({ ...f, assetSelections: next });
+      const list = new Set(f.environments ?? []);
+      if (list.has(env)) list.delete(env); else list.add(env);
+      return { ...f, environments: [...list] };
     });
   }
 
-  // 同步兼容字段：targets = 资源名称，metrics = 指标去重
-  function syncFlat(f: InspectionTask): InspectionTask {
-    const targets = f.assetSelections
-      .map((s) => assets.find((a) => a.id === s.assetId)?.name)
-      .filter(Boolean) as string[];
-    const metrics = Array.from(new Set(f.assetSelections.flatMap((s) => s.metrics)));
-    return { ...f, targets, metrics };
+  function updateCheckItem(key: string, patch: Partial<CheckItemConfig>) {
+    setForm((f) => ({
+      ...f,
+      checkItems: (f.checkItems ?? []).map((i) => (i.key === key ? { ...i, ...patch } : i)),
+    }));
   }
 
   async function handleNlGenerate() {
-    if (!nlPrompt.trim()) { toast.error("请描述你希望的巡检规则"); return; }
+    if (!nlPrompt.trim()) { toast.error("请描述你希望的巡检方案"); return; }
     setNlLoading(true);
     try {
       const assetCatalog = assets.map((a) => ({
@@ -422,407 +548,396 @@ function TaskEditorDialog({
         businessSystem: a.businessSystem, ip: a.ip, environment: a.environment,
       }));
       const res = await callInspectionAi({ mode: "parse", prompt: nlPrompt, assetCatalog });
-      const r = res as ParsedTask;
-
-      // 校验 & 规范化 AI 返回的资源与指标
-      const cleanedSelections: { assetId: string; metrics: string[] }[] = [];
-      const invalidAssetIds: string[] = [];
-      const trimmedMetricsBy: string[] = [];
-      for (const sel of r.assetSelections ?? []) {
-        const asset = assets.find((a) => a.id === sel.assetId);
-        if (!asset) { invalidAssetIds.push(sel.assetId); continue; }
-        const pool = metricPoolByType[asset.type];
-        const validMetrics = (sel.metrics ?? []).filter((m) => pool.includes(m));
-        const finalMetrics = validMetrics.length ? validMetrics : [...pool];
-        if (!validMetrics.length) trimmedMetricsBy.push(asset.name);
-        // 去重合并（若 AI 重复给了同一资源）
-        const existing = cleanedSelections.find((x) => x.assetId === asset.id);
-        if (existing) {
-          existing.metrics = Array.from(new Set([...existing.metrics, ...finalMetrics]));
-        } else {
-          cleanedSelections.push({ assetId: asset.id, metrics: Array.from(new Set(finalMetrics)) });
-        }
-      }
-
-      setForm((f) => syncFlat({
+      setForm((f) => ({
         ...f,
-        name: r.name || f.name,
-        type: (r.type as any) || f.type,
-        schedule: r.schedule || f.schedule,
-        owner: r.owner || f.owner,
-        description: r.description || f.description,
-        assetSelections: cleanedSelections.length ? cleanedSelections : f.assetSelections,
+        name: res.name || f.name,
+        type: (res.type as any) || f.type,
+        frequency: res.schedule || f.frequency,
+        owner: res.owner || f.owner,
+        description: res.description || f.description,
       }));
-
-      const notes: string[] = [];
-      if (invalidAssetIds.length) notes.push(`已忽略 ${invalidAssetIds.length} 个未匹配到的资源`);
-      if (trimmedMetricsBy.length) notes.push(`「${trimmedMetricsBy.join("、")}」使用了默认指标`);
-      setNlReasoning([r.reasoning || "", ...notes].filter(Boolean).join("\n"));
-      setMergeResult(null);
-      toast.success(
-        cleanedSelections.length
-          ? `已预填 ${cleanedSelections.length} 个资源，请核对指标后保存`
-          : "已预填基础字段，请手工选择资源与指标",
-      );
+      setNlReasoning(res.reasoning || "");
       setNlOpen(false);
+      toast.success("已预填方案基础信息，请核对巡检范围与规则");
     } catch (e: any) {
       toast.error(e?.message || "AI 生成失败");
     } finally { setNlLoading(false); }
   }
 
-  async function handleMergeCheck() {
-    if (!form.name.trim() || form.assetSelections.length === 0) {
-      toast.error("请先完善任务名称并至少选择一个资源，再请 AI 评估");
-      return;
-    }
-    setMergeLoading(true); setMergeResult(null);
-    try {
-      const draft = { name: form.name, type: form.type, schedule: form.schedule, metrics: form.metrics, targets: form.targets, description: form.description ?? "" };
-      const peers = existingTasks.filter((t) => t.id !== form.id).map((t) => ({
-        id: t.id, name: t.name, type: t.type, schedule: t.schedule, metrics: t.metrics, targets: t.targets, description: t.description ?? "",
-      }));
-      const res = await callInspectionAi({ mode: "merge", draft, existingTasks: peers });
-      setMergeResult(res as MergeSuggestion);
-    } catch (e: any) {
-      toast.error(e?.message || "AI 评估失败");
-    } finally { setMergeLoading(false); }
-  }
-
-  function applySuggestion() {
-    if (!mergeResult) return;
-    const s = mergeResult.suggestedTask;
-    setForm((f) => ({
-      ...f, name: s.name, type: s.type as any, schedule: s.schedule,
-      description: s.description,
-    }));
-    toast.success("已应用 AI 建议（资源与指标请手工确认）");
-    setMergeResult(null);
-  }
-
   function submit() {
-    if (!form.name.trim()) { toast.error("请填写任务名称"); return; }
-    if (form.assetSelections.length === 0) { toast.error("请至少选择一个巡检资源"); return; }
-    const emptyOne = form.assetSelections.find((s) => s.metrics.length === 0);
-    if (emptyOne) {
-      const a = assets.find((x) => x.id === emptyOne.assetId);
-      toast.error(`请为「${a?.name ?? emptyOne.assetId}」至少选择一项指标`);
-      return;
+    if (!form.name.trim()) { toast.error("请填写方案名称"); return; }
+    if (!form.appliesTo) { toast.error("请选择适用资产类型"); return; }
+    if (form.scopeType === "指定业务系统" && !(form.businessSystems ?? []).length) {
+      toast.error("请选择至少一个业务系统"); return;
     }
-    onSave(form);
+    if (form.scopeType === "指定资产" && !(form.assetIds ?? []).length) {
+      toast.error("请选择至少一个资产"); return;
+    }
+    if (enabledItems.length === 0) { toast.error("请至少启用一个巡检项"); return; }
+
+    // 派生兼容字段
+    const targets = hitAssets.map((a) => a.name);
+    const metrics = enabledItems.map((i) => i.name);
+    const assetSelections = hitAssets.map((a) => ({ assetId: a.id, metrics }));
+    const schedule = form.scheduleMode === "手动" ? "手动执行" : (form.frequency || "");
+
+    if (uncoveredAssets.length) {
+      toast.warning(`${uncoveredAssets.length} 个资产未完成观测接入，已保存但巡检时将显示为未配置`);
+    }
+
+    onSave({ ...form, targets, metrics, assetSelections, schedule });
   }
-
-  const mergeTargetTask = mergeResult?.mergeIntoTaskId ? existingTasks.find((t) => t.id === mergeResult.mergeIntoTaskId) : null;
-
-  const [assetKeyword, setAssetKeyword] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"全部" | AssetType>("全部");
-
-  const filteredAssets = useMemo(() => {
-    return assets.filter((a) => {
-      if (typeFilter !== "全部" && a.type !== typeFilter) return false;
-      if (assetKeyword && ![a.name, a.ip, a.businessSystem].some((s) => s?.includes(assetKeyword))) return false;
-      return true;
-    });
-  }, [assetKeyword, typeFilter]);
-
-  const groupedAssets = useMemo(() => {
-    return filteredAssets.reduce<Record<AssetType, Asset[]>>((acc, a) => {
-      (acc[a.type] ||= []).push(a);
-      return acc;
-    }, {} as Record<AssetType, Asset[]>);
-  }, [filteredAssets]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-[1080px] p-0 overflow-hidden flex flex-col">
         <SheetHeader className="px-6 pt-6 pb-3 border-b">
-          <SheetTitle className="text-base">{isEdit ? "编辑巡检任务" : "新建巡检任务"}</SheetTitle>
+          <SheetTitle className="text-base">{isEdit ? "编辑巡检方案" : "新增巡检方案"}</SheetTitle>
           <SheetDescription className="text-xs">
-            左侧选择巡检资源（支持搜索/按类型筛选），右侧维护任务基础信息与每个资源的巡检指标。
+            巡检方案面向资产配置，不直接选择原始 Zabbix Item。具体 Item 来自「资产管理 → 观测接入」。
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 grid grid-cols-[300px_1fr] min-h-0">
-          {/* 左：资源选择 */}
-          <aside className="border-r bg-muted/10 flex flex-col min-h-0">
-            <div className="p-3 border-b space-y-2">
-              <div className="text-xs font-medium flex items-center justify-between">
-                <span>巡检资源</span>
-                <span className="text-muted-foreground">已选 {form.assetSelections.length}</span>
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {/* AI 助手 */}
+          <div className="rounded-lg border border-primary/20 bg-primary-soft/30 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="font-medium">AI 助手</span>
+                <span className="text-xs text-muted-foreground">用自然语言描述，快速生成方案草稿</span>
               </div>
-              <div className="relative">
-                <Input value={assetKeyword} onChange={(e) => setAssetKeyword(e.target.value)}
-                  placeholder="搜索名称 / IP / 业务系统" className="h-8 text-xs" />
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {(["全部", "主机", "数据库", "应用服务", "中间件"] as const).map((t) => (
-                  <button key={t} onClick={() => setTypeFilter(t as any)}
-                    className={`text-[11px] px-2 py-0.5 rounded border ${
-                      typeFilter === t ? "border-primary bg-primary-soft text-primary" : "border-transparent bg-secondary text-muted-foreground hover:bg-muted"
-                    }`}>{t}</button>
-                ))}
-              </div>
+              <Button size="sm" variant="outline" onClick={() => setNlOpen((v) => !v)}>
+                <Wand2 className="h-4 w-4 mr-1" />自然语言生成
+              </Button>
             </div>
-            <div className="flex-1 overflow-y-auto">
-              {Object.keys(groupedAssets).length === 0 && (
-                <div className="p-4 text-center text-xs text-muted-foreground">无匹配资源</div>
-              )}
-              {(Object.keys(groupedAssets) as AssetType[]).map((type) => (
-                <div key={type}>
-                  <div className="sticky top-0 bg-muted/60 px-3 py-1 text-[11px] text-muted-foreground border-b">
-                    {type} · {groupedAssets[type].length}
-                  </div>
-                  {groupedAssets[type].map((a) => {
-                    const sel = selectedAssetIds.includes(a.id);
-                    return (
-                      <label key={a.id}
-                        className={`flex items-start gap-2 px-3 py-2 text-sm cursor-pointer border-b last:border-b-0 hover:bg-secondary/50 ${sel ? "bg-primary-soft/40" : ""}`}>
-                        <Checkbox className="mt-0.5" checked={sel} onCheckedChange={() => toggleAsset(a)} />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium text-[13px]">{a.name}</div>
-                          <div className="text-[11px] text-muted-foreground truncate">{a.businessSystem} · {a.ip}</div>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </aside>
-
-          {/* 右：任务详情 + AI + 指标 */}
-          <section className="overflow-y-auto p-5 space-y-5">
-            {/* AI 助手 */}
-            <div className="rounded-lg border border-primary/20 bg-primary-soft/30 p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <span className="font-medium">AI 助手</span>
-                  <span className="text-xs text-muted-foreground">由 Lovable AI 提供</span>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setNlOpen((v) => !v)}>
-                    <Wand2 className="h-4 w-4 mr-1" />自然语言生成
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={handleMergeCheck} disabled={mergeLoading}>
-                    {mergeLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <GitMerge className="h-4 w-4 mr-1" />}
-                    评估合并建议
+            {nlOpen && (
+              <div className="space-y-2 pt-1">
+                <Textarea rows={3} placeholder="例如：每 5 分钟对生产环境的核心交易系统主机做基础巡检"
+                  value={nlPrompt} onChange={(e) => setNlPrompt(e.target.value)} />
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setNlOpen(false)}>取消</Button>
+                  <Button size="sm" onClick={handleNlGenerate} disabled={nlLoading}>
+                    {nlLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                    生成草稿
                   </Button>
                 </div>
               </div>
+            )}
+            {nlReasoning && !nlOpen && (
+              <div className="rounded-md bg-card border p-2.5 text-xs text-muted-foreground whitespace-pre-line">
+                <span className="font-medium text-foreground">AI 推断说明：</span>{nlReasoning}
+              </div>
+            )}
+          </div>
 
-              {nlOpen && (
-                <div className="space-y-2 pt-1">
-                  <Textarea rows={3} placeholder="例如：每天早上 7 点对数据库主机做一次内存和磁盘巡检，由 DBA 负责"
-                    value={nlPrompt} onChange={(e) => setNlPrompt(e.target.value)} />
-                  <div className="flex justify-end gap-2">
-                    <Button size="sm" variant="ghost" onClick={() => setNlOpen(false)}>取消</Button>
-                    <Button size="sm" onClick={handleNlGenerate} disabled={nlLoading}>
-                      {nlLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
-                      生成草稿
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {nlReasoning && !nlOpen && (
-                <div className="rounded-md bg-card border p-2.5 text-xs text-muted-foreground whitespace-pre-line">
-                  <span className="font-medium text-foreground">AI 推断说明：</span>{nlReasoning}
-                </div>
-              )}
-
-              {mergeResult && (
-                <MergeSuggestionCard suggestion={mergeResult} targetTask={mergeTargetTask} onApply={applySuggestion} onDismiss={() => setMergeResult(null)} />
-              )}
-            </div>
-
-            {/* 基础信息 */}
-            <div className="rounded-lg border bg-card p-4 space-y-3">
-              <div className="text-sm font-semibold">任务基础信息</div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <Label className="text-xs">任务名称</Label>
-                  <Input className="mt-1.5 h-9" placeholder="例如：核心数据库专项巡检"
-                    value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-                </div>
-                <div>
-                  <Label className="text-xs">任务类型</Label>
-                  <Select value={form.type} onValueChange={(v: any) => setForm({ ...form, type: v })}>
-                    <SelectTrigger className="mt-1.5 h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="日常巡检">日常巡检</SelectItem>
-                      <SelectItem value="周巡检">周巡检</SelectItem>
-                      <SelectItem value="手动巡检">手动巡检</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">调度策略</Label>
-                  <Input className="mt-1.5 h-9" placeholder="每日 08:00 / 每 30 分钟"
-                    value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} />
-                </div>
-                <div>
-                  <Label className="text-xs">负责人</Label>
-                  <Input className="mt-1.5 h-9" value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
-                </div>
-                <div className="flex items-end">
-                  <div className="flex items-center justify-between w-full rounded-md border bg-background px-3 h-9">
-                    <Label className="text-xs">启用任务</Label>
-                    <Switch checked={form.enabled} onCheckedChange={(v) => setForm({ ...form, enabled: v })} />
-                  </div>
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs">任务描述</Label>
-                  <Textarea className="mt-1.5" rows={2} placeholder="说明该巡检任务的业务背景、关注点等"
-                    value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-                </div>
+          {/* 1. 基本信息 */}
+          <Section icon={ClipboardList} title="1. 基本信息">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <Label className="text-xs">方案名称</Label>
+                <Input className="mt-1.5 h-9" placeholder="例如：主机基础巡检"
+                  value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">适用资产类型</Label>
+                <Select value={form.appliesTo} onValueChange={(v: AssetType) => changeAppliesTo(v)}>
+                  <SelectTrigger className="mt-1.5 h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ASSET_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">负责人</Label>
+                <Input className="mt-1.5 h-9" value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs">方案说明</Label>
+                <Textarea className="mt-1.5" rows={2} placeholder="用于生产主机基础资源巡检"
+                  value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              </div>
+              <div className="col-span-2 flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                <Label className="text-xs">启用该方案</Label>
+                <Switch checked={form.enabled} onCheckedChange={(v) => setForm({ ...form, enabled: v })} />
               </div>
             </div>
+          </Section>
 
-            {/* 指标区 */}
-            <div>
-              <div className="flex items-baseline justify-between mb-2">
-                <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                  <ListChecks className="h-4 w-4 text-primary" />每资源巡检指标
-                </h4>
-                <span className="text-xs text-muted-foreground">
-                  {form.assetSelections.length} 个资源 · 共 {form.metrics.length} 项指标
-                </span>
-              </div>
-              {form.assetSelections.length === 0 ? (
-                <div className="rounded-md border border-dashed py-10 text-center text-sm text-muted-foreground">
-                  请在左侧选择巡检资源，选中后即可为每个资源勾选指标
+          {/* 2. 巡检范围 */}
+          <Section icon={Target} title="2. 巡检范围">
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs">范围类型</Label>
+                <div className="mt-1.5 flex gap-2">
+                  {(["全部", "指定业务系统", "指定资产"] as SchemeScopeType[]).map((s) => (
+                    <button key={s} onClick={() => setForm({ ...form, scopeType: s })}
+                      className={`px-3 h-8 rounded-md border text-xs ${
+                        form.scopeType === s ? "border-primary bg-primary-soft text-primary" : "bg-background hover:bg-secondary/50"
+                      }`}>
+                      {s === "全部" ? `全部${form.appliesTo}资产` : s}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  {form.assetSelections.map((s) => {
-                    const a = assets.find((x) => x.id === s.assetId);
-                    if (!a) return null;
-                    const pool = metricPoolByType[a.type];
-                    const allChecked = s.metrics.length === pool.length;
+              </div>
+
+              <div>
+                <Label className="text-xs">运行环境</Label>
+                <div className="mt-1.5 flex gap-2">
+                  {ENVIRONMENTS.map((env) => {
+                    const on = (form.environments ?? []).includes(env);
                     return (
-                      <div key={s.assetId} className="rounded-md border bg-card">
-                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium truncate">{a.name}</div>
-                            <div className="text-[11px] text-muted-foreground truncate">{a.type} · {pool.length} 项可选 · 已选 {s.metrics.length}</div>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
-                              onClick={() => setAssetMetricsAll(a.id, !allChecked)}>
-                              {allChecked ? "全不选" : "全选"}
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-                              onClick={() => toggleAsset(a)}>移除</Button>
-                          </div>
-                        </div>
-                        <div className="p-2 grid grid-cols-2 md:grid-cols-3 gap-1.5">
-                          {pool.map((m) => {
-                            const checked = s.metrics.includes(m);
-                            return (
-                              <label key={m} className={`flex items-center gap-2 rounded border px-2 py-1.5 cursor-pointer text-xs ${
-                                checked ? "border-primary bg-primary-soft/40" : "bg-background hover:bg-secondary/50"
-                              }`}>
-                                <Checkbox checked={checked} onCheckedChange={() => toggleAssetMetric(a.id, m)} />
-                                {m}
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      <button key={env} onClick={() => toggleEnv(env)}
+                        className={`px-3 h-8 rounded-md border text-xs ${
+                          on ? "border-primary bg-primary-soft text-primary" : "bg-background hover:bg-secondary/50"
+                        }`}>{env}</button>
                     );
                   })}
                 </div>
+              </div>
+
+              {form.scopeType === "指定业务系统" && (
+                <div>
+                  <Label className="text-xs">业务系统</Label>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {businessSystemsOfType.map((sys) => {
+                      const on = (form.businessSystems ?? []).includes(sys);
+                      return (
+                        <button key={sys} onClick={() => toggleBusinessSystem(sys)}
+                          className={`px-3 h-8 rounded-md border text-xs ${
+                            on ? "border-primary bg-primary-soft text-primary" : "bg-background hover:bg-secondary/50"
+                          }`}>{sys}</button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
+
+              {form.scopeType === "指定资产" && (
+                <div>
+                  <Label className="text-xs">指定资产（{(form.assetIds ?? []).length} 已选）</Label>
+                  <div className="mt-1.5 rounded-md border max-h-56 overflow-y-auto divide-y">
+                    {assetsOfType.map((a) => {
+                      const on = (form.assetIds ?? []).includes(a.id);
+                      return (
+                        <label key={a.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-secondary/40">
+                          <Checkbox checked={on} onCheckedChange={() => toggleAssetId(a.id)} />
+                          <div className="flex-1 min-w-0">
+                            <div className="truncate font-medium text-[13px]">{a.name}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">
+                              {a.businessSystem} · {a.ip} · {a.environment}
+                            </div>
+                          </div>
+                          <StatusBadge tone={a.observationStatus === "已配置" ? "success" : a.observationStatus === "部分配置" ? "warning" : "destructive"}>
+                            {a.observationStatus}
+                          </StatusBadge>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-md bg-info-soft/40 border border-info/20 px-3 py-2 text-xs text-foreground/80 space-y-1">
+                <div>当前方案将巡检 <span className="font-semibold text-info">{hitAssets.length}</span> 个 {form.appliesTo} 资产。</div>
+                {uncoveredAssets.length > 0 && (
+                  <div className="flex items-center gap-1 text-warning">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    其中 {uncoveredAssets.length} 个资产未完成观测接入，巡检时将显示为「未配置」。
+                  </div>
+                )}
+              </div>
             </div>
-          </section>
+          </Section>
+
+          {/* 3. 巡检项与异常规则 */}
+          <Section icon={ListChecks} title="3. 巡检项与异常规则">
+            <div className="rounded-md bg-secondary/50 px-3 py-2 text-xs text-muted-foreground mb-3">
+              巡检项使用资产观测接入中已映射的 Zabbix Item 和日志源。这里配置的是巡检项、频率与异常判定规则，不直接配置原始 Zabbix Item。
+            </div>
+            <div className="rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[80px]">启用</TableHead>
+                    <TableHead>巡检项</TableHead>
+                    <TableHead>关注条件</TableHead>
+                    <TableHead>异常条件</TableHead>
+                    <TableHead>判定窗口</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(form.checkItems ?? []).map((item) => (
+                    <TableRow key={item.key}>
+                      <TableCell>
+                        <Switch checked={item.enabled} onCheckedChange={(v) => updateCheckItem(item.key, { enabled: v })} />
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm font-medium">{item.name}</div>
+                        {item.optional && <span className="text-[11px] text-muted-foreground">可选</span>}
+                      </TableCell>
+                      <TableCell>
+                        <Input className="h-8 w-32" value={item.warn} onChange={(e) => updateCheckItem(item.key, { warn: e.target.value })} />
+                      </TableCell>
+                      <TableCell>
+                        <Input className="h-8 w-32" value={item.crit} onChange={(e) => updateCheckItem(item.key, { crit: e.target.value })} />
+                      </TableCell>
+                      <TableCell>
+                        <Input className="h-8 w-36" value={item.window} onChange={(e) => updateCheckItem(item.key, { window: e.target.value })} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Section>
+
+          {/* 4. 调度与通知 */}
+          <Section icon={Bell} title="4. 调度与通知">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">执行方式</Label>
+                <Select value={form.scheduleMode} onValueChange={(v: any) => setForm({ ...form, scheduleMode: v })}>
+                  <SelectTrigger className="mt-1.5 h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="定时">定时执行</SelectItem>
+                    <SelectItem value="手动">手动执行</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.scheduleMode === "定时" && (
+                <>
+                  <div>
+                    <Label className="text-xs">巡检频率</Label>
+                    <Select value={form.frequency} onValueChange={(v) => setForm({ ...form, frequency: v })}>
+                      <SelectTrigger className="mt-1.5 h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="每 5 分钟">每 5 分钟</SelectItem>
+                        <SelectItem value="每 10 分钟">每 10 分钟</SelectItem>
+                        <SelectItem value="每小时">每小时</SelectItem>
+                        <SelectItem value="每日">每日</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.frequency === "每日" && (
+                    <div>
+                      <Label className="text-xs">执行时间</Label>
+                      <Input className="mt-1.5 h-9" placeholder="09:00"
+                        value={form.runAt ?? ""} onChange={(e) => setForm({ ...form, runAt: e.target.value })} />
+                    </div>
+                  )}
+                </>
+              )}
+              <div>
+                <Label className="text-xs">异常通知</Label>
+                <Select value={form.notifyMode} onValueChange={(v: any) => setForm({ ...form, notifyMode: v })}>
+                  <SelectTrigger className="mt-1.5 h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="不通知">不通知</SelectItem>
+                    <SelectItem value="通知资产负责人">通知资产负责人</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.notifyMode === "通知资产负责人" && (
+                <div className="col-span-2">
+                  <Label className="text-xs">通知方式</Label>
+                  <div className="mt-1.5 flex gap-2">
+                    {["站内消息", "邮件", "企业微信"].map((c) => {
+                      const on = (form.notifyChannels ?? []).includes(c);
+                      return (
+                        <button key={c} onClick={() => setForm((f) => {
+                          const list = new Set(f.notifyChannels ?? []);
+                          if (list.has(c)) list.delete(c); else list.add(c);
+                          return { ...f, notifyChannels: [...list] };
+                        })}
+                          className={`px-3 h-8 rounded-md border text-xs ${
+                            on ? "border-primary bg-primary-soft text-primary" : "bg-background hover:bg-secondary/50"
+                          }`}>{c}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div className="col-span-2 flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                <Label className="text-xs">是否生成巡检报告</Label>
+                <Switch checked={!!form.generateReport} onCheckedChange={(v) => setForm({ ...form, generateReport: v })} />
+              </div>
+            </div>
+          </Section>
+
+          {/* 5. 预览影响范围 */}
+          <Section icon={CheckCircle2} title="预览影响范围">
+            <div className="rounded-md border bg-card px-3 py-2.5 text-sm space-y-1">
+              <div>资产类型：<span className="font-medium">{form.appliesTo}</span></div>
+              <div>命中资产：<span className="font-medium">{hitAssets.length}</span> 个</div>
+              <div>巡检项：<span className="font-medium">{enabledItems.length}</span> 项</div>
+              <div>巡检频率：<span className="font-medium">{form.scheduleMode === "手动" ? "手动执行" : form.frequency}</span></div>
+              <div>预计每次查询指标：<span className="font-medium">{hitAssets.length * enabledItems.length}</span> 项</div>
+              <div>未完成观测接入资产：<span className={`font-medium ${uncoveredAssets.length ? "text-warning" : ""}`}>{uncoveredAssets.length}</span> 个</div>
+            </div>
+
+            <div className="mt-3 rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>资产名称</TableHead>
+                    <TableHead>IP</TableHead>
+                    <TableHead>Zabbix Host</TableHead>
+                    <TableHead>观测接入状态</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {hitAssets.slice(0, 20).map((a) => {
+                    const cfg = observationConfigs[a.id];
+                    return (
+                      <TableRow key={a.id}>
+                        <TableCell className="text-sm">{a.name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground tabular-nums">{a.ip}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{cfg?.zabbixHost || <span className="text-destructive">未绑定</span>}</TableCell>
+                        <TableCell>
+                          <StatusBadge tone={a.observationStatus === "已配置" ? "success" : a.observationStatus === "部分配置" ? "warning" : "destructive"}>
+                            {a.observationStatus === "已配置" ? "已完成" : "未完成"}
+                          </StatusBadge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {hitAssets.length === 0 && (
+                    <TableRow><TableCell colSpan={4} className="text-center text-xs text-muted-foreground py-4">未命中任何资产</TableCell></TableRow>
+                  )}
+                  {hitAssets.length > 20 && (
+                    <TableRow><TableCell colSpan={4} className="text-center text-xs text-muted-foreground py-2">
+                      仅显示前 20 条，共 {hitAssets.length} 条
+                    </TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Section>
         </div>
 
         <div className="border-t px-6 py-3 flex justify-end gap-2 bg-background">
           <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button onClick={submit}>{isEdit ? "保存修改" : "创建任务"}</Button>
+          <Button onClick={submit}>{isEdit ? "保存修改" : "创建方案"}</Button>
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-
-function MergeSuggestionCard({
-  suggestion, targetTask, onApply, onDismiss,
-}: {
-  suggestion: MergeSuggestion;
-  targetTask: InspectionTask | null | undefined;
-  onApply: () => void;
-  onDismiss: () => void;
-}) {
-  const verdictMap: Record<string, { label: string; tone: "success" | "warning" | "destructive" | "info" }> = {
-    keep: { label: "无冲突", tone: "success" },
-    adjust: { label: "建议调整", tone: "warning" },
-    merge: { label: "建议合并", tone: "destructive" },
-  };
-  const v = verdictMap[suggestion.verdict] ?? verdictMap.keep;
-
+function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-md border bg-card p-3 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Lightbulb className="h-4 w-4 text-warning" />
-          <span className="text-sm font-semibold">AI 评估结果</span>
-          <StatusBadge tone={v.tone}>{v.label}</StatusBadge>
-        </div>
-        <Button size="sm" variant="ghost" onClick={onDismiss}><X className="h-4 w-4" /></Button>
+    <div className="rounded-lg border bg-card">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30">
+        <Icon className="h-4 w-4 text-primary" />
+        <h4 className="text-sm font-semibold">{title}</h4>
       </div>
-      <p className="text-sm text-foreground/90">{suggestion.summary}</p>
-
-      {suggestion.verdict === "merge" && targetTask && (
-        <div className="rounded-md bg-secondary/50 px-2.5 py-2 text-xs">
-          <span className="text-muted-foreground">建议合并到现有任务：</span>
-          <span className="font-medium ml-1">{targetTask.name}</span>
-          <span className="text-muted-foreground ml-2">({targetTask.schedule})</span>
-        </div>
-      )}
-
-      {suggestion.reasoning && (
-        <details className="text-xs text-muted-foreground">
-          <summary className="cursor-pointer hover:text-foreground">查看推理过程</summary>
-          <p className="mt-1.5 whitespace-pre-line leading-relaxed">{suggestion.reasoning}</p>
-        </details>
-      )}
-
-      {suggestion.risks?.length > 0 && (
-        <div className="text-xs">
-          <div className="text-muted-foreground mb-1">潜在风险</div>
-          <ul className="list-disc list-inside space-y-0.5 text-foreground/80">
-            {suggestion.risks.map((r, i) => <li key={i}>{r}</li>)}
-          </ul>
-        </div>
-      )}
-
-      <div className="rounded-md border bg-background p-2.5 space-y-1">
-        <div className="text-xs font-medium text-muted-foreground">建议任务字段</div>
-        <div className="text-sm font-medium">{suggestion.suggestedTask.name}</div>
-        <div className="text-xs text-muted-foreground">
-          {suggestion.suggestedTask.type} · {suggestion.suggestedTask.schedule}
-        </div>
-        <div className="flex flex-wrap gap-1 pt-1">
-          {suggestion.suggestedTask.metrics.map((m) => (
-            <span key={m} className="text-xs rounded bg-secondary px-1.5 py-0.5">{m}</span>
-          ))}
-          {suggestion.suggestedTask.targets.map((t) => (
-            <span key={t} className="text-xs rounded bg-primary-soft text-primary px-1.5 py-0.5">{t}</span>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-2 pt-1">
-        <Button size="sm" variant="ghost" onClick={onDismiss}>忽略</Button>
-        <Button size="sm" onClick={onApply}>应用建议</Button>
-      </div>
+      <div className="p-4">{children}</div>
     </div>
   );
 }
 
-/* ---------------- 任务详情抽屉（含历史） ---------------- */
+/* ---------------- 方案详情抽屉（含历史） ---------------- */
 
 function TaskDetailSheet({
   task, runs, onClose, onEdit, onRun, onOpenRunDetail,
@@ -860,43 +975,31 @@ function TaskDetailSheet({
             </SheetHeader>
 
             <div className="mt-5 grid grid-cols-2 gap-3">
-              <InfoTile icon={ListChecks} label="任务类型" value={task.type} />
-              <InfoTile icon={Clock} label="调度" value={task.schedule} />
+              <InfoTile icon={ListChecks} label="适用类型" value={task.appliesTo || "—"} />
+              <InfoTile icon={Clock} label="巡检频率" value={task.frequency || task.schedule} />
               <InfoTile icon={UserIcon} label="负责人" value={task.owner} />
               <InfoTile icon={Calendar} label="创建时间" value={task.createdAt} />
             </div>
 
             <div className="mt-5">
-              <div className="text-xs text-muted-foreground mb-2">巡检资源与指标（{task.assetSelections.length} 个资源 · {task.metrics.length} 项指标）</div>
-              {task.assetSelections.length === 0 ? (
-                <div className="rounded-md border border-dashed py-4 text-center text-xs text-muted-foreground">
-                  未关联资源
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {task.assetSelections.map((s) => {
-                    const a = assets.find((x) => x.id === s.assetId);
-                    return (
-                      <div key={s.assetId} className="rounded-md border bg-card px-3 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium truncate">{a?.name ?? s.assetId}</div>
-                            <div className="text-[11px] text-muted-foreground truncate">
-                              {a ? `${a.type} · ${a.businessSystem} · ${a.ip}` : "已删除资源"}
-                            </div>
-                          </div>
-                          <span className="text-[11px] text-muted-foreground shrink-0">{s.metrics.length} 项</span>
-                        </div>
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {s.metrics.map((m) => (
-                            <span key={m} className="text-[11px] rounded bg-secondary px-1.5 py-0.5">{m}</span>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <div className="text-xs text-muted-foreground mb-2">巡检范围</div>
+              <div className="rounded-md border bg-card px-3 py-2 text-sm">{summarizeScope(task)}</div>
+            </div>
+
+            <div className="mt-5">
+              <div className="text-xs text-muted-foreground mb-2">
+                巡检项（{(task.checkItems ?? []).filter((i) => i.enabled).length} 项已启用）
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(task.checkItems ?? []).filter((i) => i.enabled).map((i) => (
+                  <span key={i.key} className="text-xs rounded bg-secondary px-2 py-1">
+                    {i.name} · <span className="text-warning">关注 {i.warn}</span> · <span className="text-destructive">异常 {i.crit}</span>
+                  </span>
+                ))}
+                {(task.checkItems ?? []).filter((i) => i.enabled).length === 0 && task.metrics.map((m) => (
+                  <span key={m} className="text-xs rounded bg-secondary px-2 py-1">{m}</span>
+                ))}
+              </div>
             </div>
 
             <div className="mt-5 grid grid-cols-3 gap-3">
