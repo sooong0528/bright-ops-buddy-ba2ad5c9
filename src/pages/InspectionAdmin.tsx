@@ -93,8 +93,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 type ParsedTask = {
   name: string; type: string; schedule: string;
-  metrics: string[]; targets: string[]; owner: string;
-  description: string; reasoning: string;
+  owner: string; description: string; reasoning: string;
+  assetSelections: { assetId: string; metrics: string[] }[];
 };
 type MergeSuggestion = {
   verdict: "merge" | "adjust" | "keep";
