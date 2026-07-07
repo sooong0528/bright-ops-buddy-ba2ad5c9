@@ -173,6 +173,9 @@ export interface ObservationConfig {
 }
 
 /* ========== 异常/关注记录 & 故障分析 ========== */
+export type RecordHandleStatus = "待处理" | "已恢复" | "已忽略";
+export type RecordAnalysisStatus = "未分析" | "分析中" | "已分析" | "分析失败";
+
 export interface AbnormalRecord {
   id: string;
   taskId: string;              // 来源巡检任务
@@ -180,6 +183,8 @@ export interface AbnormalRecord {
   sourceRunLabel?: string;     // 来源巡检显示名（方案 · 执行编号）
   assetId: string;
   assetName: string;
+  assetType: AssetType;
+  businessSystem: string;
   metric: string;
   level: AbnormalLevel;
   value: string;
@@ -195,17 +200,31 @@ export interface AbnormalRecord {
   occurrences: number;
   description: string;
   evidenceSnapshot: string;    // 证据快照文字
-  status: "待处理" | "分析中" | "已忽略" | "已恢复";
+  status: RecordHandleStatus;
+  analysisStatus: RecordAnalysisStatus;
   analysisTaskId?: string;
   handleLog?: { time: string; actor: string; action: string; note?: string }[];
 }
 
+export type AnalysisTaskStatus = "分析中" | "已分析" | "分析失败";
+
 export interface AnalysisTask {
   id: string;
   recordId: string;
+  // 关联异常快照（用于列表展示）
+  assetName: string;
+  assetType: AssetType;
+  businessSystem: string;
+  metric: string;
+  level: AbnormalLevel;
+  source: "异常记录" | "手动";
   createdBy: string;
   createdAt: string;
-  status: "分析中" | "已完成";
+  completedAt?: string;
+  status: AnalysisTaskStatus;
+  /** 分析中进度步骤 */
+  progress?: { label: string; done: boolean }[];
+  failReason?: string;
   // 分析结果
   metricTrend: {
     metric: string;
