@@ -896,7 +896,7 @@ function ObservationEditor({
 function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: EditableConfig; onEdit: () => void; onEditObs: () => void }) {
   const meta = typeMeta[asset.type];
   const Icon = meta.icon;
-  const hosts = cfg ? Object.keys(cfg.hostItems) : [];
+  const hosts = cfg ? Object.keys(cfg.hostMappings) : [];
   const logSources = cfg?.logSources ?? [];
 
   return (
@@ -937,41 +937,57 @@ function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: Ed
           </div>
         </Section>
 
-        <Section title={<span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-primary" />Zabbix 观测项</span>}>
+        <Section title={<span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-primary" />Zabbix Host / Item 映射</span>}>
           {hosts.length ? (
             <div className="space-y-2">
-              {hosts.map((h) => (
-                <div key={h} className="rounded-lg border bg-card p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-mono text-xs text-primary">{h}</span>
-                    <span className="text-[11px] text-muted-foreground">{cfg?.hostItems[h]?.length ?? 0} 项</span>
+              {hosts.map((h) => {
+                const mappings = cfg?.hostMappings[h] ?? [];
+                const matched = mappings.filter((m) => m.matchedItems.length > 0).length;
+                return (
+                  <div key={h} className="rounded-lg border bg-card p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-mono text-xs text-primary">{h}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {matched}/{mappings.length} 已匹配
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      {mappings.map((m) => (
+                        <div key={m.metric} className="flex items-start justify-between gap-2 text-xs">
+                          <span className="text-foreground/90 flex-shrink-0">{m.metric}</span>
+                          <span className="text-muted-foreground font-mono text-[11px] text-right truncate">
+                            {m.matchedItems.length > 0 ? m.matchedItems.join(", ") : "未匹配"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(cfg?.hostItems[h] ?? []).map((it) => (
-                      <Badge key={it} variant="secondary" className="text-xs font-normal">{it}</Badge>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
-            <EmptyHint text="尚未配置 Zabbix 观测项" />
+            <EmptyHint text="尚未关联 Zabbix Host" />
           )}
         </Section>
 
-        <Section title={<span className="flex items-center gap-1.5"><FileText className="h-4 w-4 text-info" />日志观测（Filebeat + ES）</span>}>
+        <Section title={<span className="flex items-center gap-1.5"><FileText className="h-4 w-4 text-info" />ES 日志源</span>}>
           {logSources.length ? (
             <div className="space-y-1.5">
-              {logSources.map((l) => (
-                <div key={l.source} className="flex items-center justify-between rounded-md border bg-card px-2.5 py-1.5">
-                  <span className="text-xs font-mono">{l.source}</span>
-                  <span className="text-[11px] text-muted-foreground">{l.purpose || "未标注用途"}</span>
+              {logSources.map((l, i) => (
+                <div key={i} className="flex items-center justify-between rounded-md border bg-card px-2.5 py-1.5 gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="text-xs font-medium truncate">{l.name}</span>
+                    <Badge variant="outline" className="text-[10px] font-normal">{l.logType}</Badge>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground font-mono truncate">{l.filter || "—"}</span>
+                  <span className={`text-[10px] ${l.enabled ? "text-success" : "text-muted-foreground"}`}>
+                    {l.enabled ? "启用" : "停用"}
+                  </span>
                 </div>
               ))}
             </div>
-
           ) : (
-            <EmptyHint text="尚未配置日志观测源" />
+            <EmptyHint text="尚未配置日志源" />
           )}
         </Section>
 
