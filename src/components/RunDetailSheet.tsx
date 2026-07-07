@@ -6,10 +6,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
-import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
-import { Clock, User as UserIcon, Calendar, ListChecks, AlertTriangle, AlertCircle, CheckCircle2, Target, Wrench, MessageSquare } from "lucide-react";
+import { Clock, User as UserIcon, Calendar, ListChecks, AlertTriangle, AlertCircle, CheckCircle2, Target } from "lucide-react";
 import {
   assets,
   hosts,
