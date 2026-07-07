@@ -176,24 +176,6 @@ export function RunDetailSheet({ run, task, onClose }: Props) {
                                         <span className="text-xs font-medium truncate">{item.name}</span>
                                         <span className="text-xs tabular-nums text-foreground">{value}</span>
                                         <StatusBadge tone={tone}>{level}</StatusBadge>
-                                        <div className="ml-auto flex items-center gap-1">
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-6 px-2 text-xs"
-                                            onClick={() => startAnalysis(a.name, item.name, value, level)}
-                                          >
-                                            <Wrench className="h-3 w-3 mr-1" />故障分析
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-6 px-2 text-xs"
-                                            onClick={() => askInAssistant(a.name, item.name, value, level)}
-                                          >
-                                            <MessageSquare className="h-3 w-3 mr-1" />追问
-                                          </Button>
-                                        </div>
                                       </div>
                                     );
                                   })}
