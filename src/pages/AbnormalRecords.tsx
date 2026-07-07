@@ -115,47 +115,45 @@ export default function AbnormalRecords() {
         <SummaryTile icon={Ban} label="已忽略" value={String(recStats.ignored)} tone="muted" />
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="搜索资产 / 指标 / 描述"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              className="h-9 pl-8 w-56"
+            />
+          </div>
+          <Select value={levelFilter} onValueChange={setLevelFilter}>
+            <SelectTrigger className="h-9 w-28"><SelectValue placeholder="级别" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部级别</SelectItem>
+              <SelectItem value="异常">异常</SelectItem>
+              <SelectItem value="关注">关注</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={recStatusFilter} onValueChange={setRecStatusFilter}>
+            <SelectTrigger className="h-9 w-32"><SelectValue placeholder="处理状态" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部状态</SelectItem>
+              <SelectItem value="待处理">待处理</SelectItem>
+              <SelectItem value="分析中">分析中</SelectItem>
+              <SelectItem value="已恢复">已恢复</SelectItem>
+              <SelectItem value="已忽略">已忽略</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Button variant="outline"><RefreshCw className="h-4 w-4 mr-2" />刷新</Button>
       </div>
 
       <div className="panel">
-        <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-3">
-          <div>
-            <h3 className="font-semibold">异常/关注记录</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              可跟踪、可处理、可闭环的问题记录。同一资产 + 指标 + 触发规则在未闭环前会合并为一条记录，仅更新最近发现时间与持续时间。
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="搜索资产 / 指标 / 描述"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                className="h-9 pl-8 w-56"
-              />
-            </div>
-            <Select value={levelFilter} onValueChange={setLevelFilter}>
-              <SelectTrigger className="h-9 w-28"><SelectValue placeholder="级别" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部级别</SelectItem>
-                <SelectItem value="异常">异常</SelectItem>
-                <SelectItem value="关注">关注</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={recStatusFilter} onValueChange={setRecStatusFilter}>
-              <SelectTrigger className="h-9 w-32"><SelectValue placeholder="处理状态" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部状态</SelectItem>
-                <SelectItem value="待处理">待处理</SelectItem>
-                <SelectItem value="分析中">分析中</SelectItem>
-                <SelectItem value="已恢复">已恢复</SelectItem>
-                <SelectItem value="已忽略">已忽略</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="px-5 pt-5 pb-3">
+          <h3 className="font-semibold">异常/关注记录</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            可跟踪、可处理、可闭环的问题记录。同一资产 + 指标 + 触发规则在未闭环前会合并为一条记录，仅更新最近发现时间与持续时间。
+          </p>
         </div>
 
         <Table>
