@@ -64,7 +64,7 @@ export default function AbnormalRecords() {
   }
   function askAbout(r: AbnormalRecord) {
     sessionStorage.setItem("assistant.context", JSON.stringify({
-      sourceType: r.level === "关注" ? "关注项" : "巡检异常",
+      sourceType: r.currentLevel === "关注" ? "关注项" : "巡检异常",
       sourceId: r.id,
       title: `${r.assetName} · ${r.metric}`,
       snapshot: r.evidenceSnapshot || r.description,
@@ -74,7 +74,7 @@ export default function AbnormalRecords() {
 
   const filteredRecords = useMemo(() => {
     return abnormalRecords.filter((r) => {
-      if (levelFilter !== "all" && r.level !== levelFilter) return false;
+      if (levelFilter !== "all" && r.currentLevel !== levelFilter && r.maxLevel !== levelFilter) return false;
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (analysisFilter !== "all" && r.analysisStatus !== analysisFilter) return false;
       if (keyword) {

@@ -69,8 +69,8 @@ export default function Inspection() {
     const running = inspectionRuns.filter((r) => r.status === "运行中").length;
     const completionRate = totalRuns ? Math.round((finished / totalRuns) * 100) : 0;
     const recordsTotal = abnormalRecords.length;
-    const abnormal = abnormalRecords.filter((r) => r.level === "异常").length;
-    const attention = abnormalRecords.filter((r) => r.level === "关注").length;
+    const abnormal = abnormalRecords.filter((r) => r.currentLevel === "异常").length;
+    const attention = abnormalRecords.filter((r) => r.currentLevel === "关注").length;
     return { totalRuns, finished, running, completionRate, recordsTotal, abnormal, attention };
   }, []);
 
