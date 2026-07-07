@@ -153,7 +153,8 @@ export default function AbnormalRecords() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-16">级别</TableHead>
+              <TableHead className="w-20">当前级别</TableHead>
+              <TableHead className="w-20">最高级别</TableHead>
               <TableHead>资产 / 指标</TableHead>
               <TableHead className="w-20">当前值</TableHead>
               <TableHead>触发规则</TableHead>
@@ -167,7 +168,7 @@ export default function AbnormalRecords() {
           <TableBody>
             {filteredRecords.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-12 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={10} className="py-12 text-center text-sm text-muted-foreground">
                   暂无匹配的异常/关注记录
                 </TableCell>
               </TableRow>
@@ -175,8 +176,13 @@ export default function AbnormalRecords() {
               filteredRecords.map((r) => (
                 <TableRow key={r.id} className="hover:bg-secondary/40 cursor-pointer" onClick={() => setActiveRecordId(r.id)}>
                   <TableCell>
-                    <StatusBadge tone={r.level === "异常" ? "destructive" : "warning"} dot={r.level === "异常"}>
-                      {r.level}
+                    <StatusBadge tone={r.currentLevel === "异常" ? "destructive" : "warning"} dot={r.currentLevel === "异常"}>
+                      {r.currentLevel}
+                    </StatusBadge>
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge tone={r.maxLevel === "异常" ? "destructive" : "warning"}>
+                      {r.maxLevel}
                     </StatusBadge>
                   </TableCell>
                   <TableCell>
