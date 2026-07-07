@@ -159,6 +159,7 @@ export default function AbnormalRecords() {
               <TableHead className="w-20">当前值</TableHead>
               <TableHead>触发规则</TableHead>
               <TableHead className="w-32">首次发现</TableHead>
+              <TableHead className="w-32">最新记录</TableHead>
               <TableHead className="w-28">持续时间</TableHead>
               <TableHead className="w-24">处理状态</TableHead>
               <TableHead className="w-24">分析状态</TableHead>
@@ -168,7 +169,7 @@ export default function AbnormalRecords() {
           <TableBody>
             {filteredRecords.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="py-12 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={11} className="py-12 text-center text-sm text-muted-foreground">
                   暂无匹配的异常/关注记录
                 </TableCell>
               </TableRow>
@@ -194,6 +195,10 @@ export default function AbnormalRecords() {
                   <TableCell className="text-xs text-muted-foreground tabular-nums">
                     {r.firstSeen}
                     <div className="text-[11px] text-muted-foreground/70 truncate" title={r.sourceRunLabel}>来源：{r.sourceRunLabel ?? "—"}</div>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground tabular-nums">
+                    {r.lastSeen}
+                    <div className="text-[11px] text-muted-foreground/70">最近一次巡检命中</div>
                   </TableCell>
                   <TableCell className="text-xs tabular-nums">
                     {r.duration}
