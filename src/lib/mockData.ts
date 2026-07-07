@@ -186,7 +186,12 @@ export interface AbnormalRecord {
   assetType: AssetType;
   businessSystem: string;
   metric: string;
-  level: AbnormalLevel;
+  /** 当前级别：最近一次巡检命中的级别 */
+  currentLevel: AbnormalLevel;
+  /** 最高级别：本次问题周期内曾达到的最高级别 */
+  maxLevel: AbnormalLevel;
+  /** 巡检命中记录（一个异常记录 可对应多次巡检结果，级别可能不同） */
+  inspectionHits: { runId: string; runLabel: string; time: string; level: AbnormalLevel; value: string }[];
   value: string;
   /** @deprecated 使用 triggerRule */
   threshold: string;
