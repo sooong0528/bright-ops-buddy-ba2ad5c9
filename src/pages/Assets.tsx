@@ -452,7 +452,7 @@ export default function Assets() {
           {obsEditAsset && (
             <ObservationEditor
               asset={obsEditAsset}
-              value={configs[obsEditAsset.id] ?? { hostItems: {}, logSources: [] }}
+              value={configs[obsEditAsset.id] ?? { hostMappings: {}, logSources: [] }}
               onCancel={() => setObsEditId(null)}
               onSave={(cfg) => saveObsConfig(obsEditAsset.id, cfg)}
             />
