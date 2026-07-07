@@ -46,7 +46,7 @@ export default function Analysis() {
         <SummaryCard label="异常/关注总数" value={stats.total} icon={AlertTriangle} tone="primary" />
         <SummaryCard label="待处理" value={stats.pending} icon={Clock} tone="warning" />
         <SummaryCard label="分析中" value={stats.analyzing} icon={Bot} tone="info" />
-        <SummaryCard label="已闭环" value={stats.closed} icon={CheckCircle2} tone="success" />
+        <SummaryCard label="已恢复" value={stats.closed} icon={CheckCircle2} tone="success" />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -55,7 +55,8 @@ export default function Analysis() {
             <TabsTrigger value="全部">全部</TabsTrigger>
             <TabsTrigger value="待处理">待处理</TabsTrigger>
             <TabsTrigger value="分析中">分析中</TabsTrigger>
-            <TabsTrigger value="已闭环">已闭环</TabsTrigger>
+            <TabsTrigger value="已恢复">已恢复</TabsTrigger>
+            <TabsTrigger value="已忽略">已忽略</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="relative">
