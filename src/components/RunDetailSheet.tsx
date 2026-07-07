@@ -86,24 +86,6 @@ export function RunDetailSheet({ run, task, onClose }: Props) {
   const scopedAssets = run && task ? resolveScopedAssets(task) : [];
   const enabledItems = (task?.checkItems ?? []).filter((i) => i.enabled);
 
-  const navigate = useNavigate();
-
-  const startAnalysis = (assetName: string, itemName: string, value: string, level: string) => {
-    toast({ title: "已发起故障分析", description: `${assetName} · ${itemName} · ${value}` });
-    sessionStorage.setItem("analysis.pendingContext", JSON.stringify({
-      assetName, itemName, value, level, runId: run?.id, taskName: task?.name,
-    }));
-    navigate("/analysis");
-  };
-
-  const askInAssistant = (assetName: string, itemName: string, value: string, level: string) => {
-    sessionStorage.setItem("assistant.pendingReportContext", JSON.stringify({
-      id: `${run?.id}-${assetName}-${itemName}`,
-      title: `${assetName} · ${itemName}（${level} ${value}）`,
-      type: "巡检异常追问",
-    }));
-    navigate("/assistant");
-  };
 
   return (
     <Sheet open={!!run} onOpenChange={(v) => !v && onClose()}>
