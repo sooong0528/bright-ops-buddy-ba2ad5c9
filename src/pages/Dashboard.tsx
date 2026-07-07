@@ -129,7 +129,7 @@ export default function Dashboard() {
             {abnormalRecords.slice(0, 5).map((r) => (
               <Link key={r.id} to={`/analysis?record=${r.id}`}
                 className="flex items-center gap-3 rounded-lg border bg-card/50 px-3 py-2.5 hover:border-primary/40 hover:bg-primary-soft/30 transition group">
-                <StatusBadge tone={r.level === "异常" ? "destructive" : "warning"}>{r.level}</StatusBadge>
+                <StatusBadge tone={r.currentLevel === "异常" ? "destructive" : "warning"}>{r.currentLevel}</StatusBadge>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium truncate">{r.assetName} · {r.metric}</span>

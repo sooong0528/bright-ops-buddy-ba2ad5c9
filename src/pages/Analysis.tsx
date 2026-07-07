@@ -88,7 +88,6 @@ export default function Analysis() {
               <TableHead className="w-20">资产类型</TableHead>
               <TableHead className="w-32">业务系统</TableHead>
               <TableHead className="w-20">当前级别</TableHead>
-              <TableHead className="w-20">最高级别</TableHead>
               <TableHead className="w-24">分析状态</TableHead>
               <TableHead className="w-24">发起来源</TableHead>
               <TableHead className="w-20">发起人</TableHead>
@@ -100,7 +99,7 @@ export default function Analysis() {
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="py-12 text-center text-sm text-muted-foreground">暂无分析任务</TableCell>
+                <TableCell colSpan={10} className="py-12 text-center text-sm text-muted-foreground">暂无分析任务</TableCell>
               </TableRow>
             ) : filtered.map((t) => (
               <TableRow key={t.id} className="hover:bg-secondary/40 cursor-pointer" onClick={() => setOpenId(t.id)}>
@@ -108,7 +107,6 @@ export default function Analysis() {
                 <TableCell className="text-xs">{t.assetType}</TableCell>
                 <TableCell className="text-xs">{t.businessSystem}</TableCell>
                 <TableCell><StatusBadge tone={t.currentLevel === "异常" ? "destructive" : "warning"}>{t.currentLevel}</StatusBadge></TableCell>
-                <TableCell><StatusBadge tone={t.maxLevel === "异常" ? "destructive" : "warning"}>{t.maxLevel}</StatusBadge></TableCell>
                 <TableCell><StatusBadge tone={statusTone(t.status)}>{t.status}</StatusBadge></TableCell>
                 <TableCell className="text-xs text-muted-foreground">{t.source}</TableCell>
                 <TableCell className="text-xs">{t.createdBy}</TableCell>
@@ -178,7 +176,7 @@ function AnalysisDetail({ task, onGoAssistant }: { task: AnalysisTask; onGoAssis
 
       <div className="mt-4 flex flex-wrap gap-2">
         <StatusBadge tone={task.currentLevel === "异常" ? "destructive" : "warning"}>当前级别 {task.currentLevel}</StatusBadge>
-        <StatusBadge tone={task.maxLevel === "异常" ? "destructive" : "warning"}>最高级别 {task.maxLevel}</StatusBadge>
+        
         <StatusBadge tone="muted">发起 {task.createdBy} · {task.createdAt}</StatusBadge>
       </div>
 

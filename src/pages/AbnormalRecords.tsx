@@ -64,7 +64,7 @@ export default function AbnormalRecords() {
   }
   function askAbout(r: AbnormalRecord) {
     sessionStorage.setItem("assistant.context", JSON.stringify({
-      sourceType: r.level === "关注" ? "关注项" : "巡检异常",
+      sourceType: r.currentLevel === "关注" ? "关注项" : "巡检异常",
       sourceId: r.id,
       title: `${r.assetName} · ${r.metric}`,
       snapshot: r.evidenceSnapshot || r.description,
@@ -74,7 +74,7 @@ export default function AbnormalRecords() {
 
   const filteredRecords = useMemo(() => {
     return abnormalRecords.filter((r) => {
-      if (levelFilter !== "all" && r.level !== levelFilter) return false;
+      if (levelFilter !== "all" && r.currentLevel !== levelFilter && r.maxLevel !== levelFilter) return false;
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (analysisFilter !== "all" && r.analysisStatus !== analysisFilter) return false;
       if (keyword) {
@@ -153,7 +153,8 @@ export default function AbnormalRecords() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-16">级别</TableHead>
+              <TableHead className="w-20">当前级别</TableHead>
+              <TableHead className="w-20">最高级别</TableHead>
               <TableHead>资产 / 指标</TableHead>
               <TableHead className="w-20">当前值</TableHead>
               <TableHead>触发规则</TableHead>
@@ -167,7 +168,7 @@ export default function AbnormalRecords() {
           <TableBody>
             {filteredRecords.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-12 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={10} className="py-12 text-center text-sm text-muted-foreground">
                   暂无匹配的异常/关注记录
                 </TableCell>
               </TableRow>
@@ -175,8 +176,13 @@ export default function AbnormalRecords() {
               filteredRecords.map((r) => (
                 <TableRow key={r.id} className="hover:bg-secondary/40 cursor-pointer" onClick={() => setActiveRecordId(r.id)}>
                   <TableCell>
-                    <StatusBadge tone={r.level === "异常" ? "destructive" : "warning"} dot={r.level === "异常"}>
-                      {r.level}
+                    <StatusBadge tone={r.currentLevel === "异常" ? "destructive" : "warning"} dot={r.currentLevel === "异常"}>
+                      {r.currentLevel}
+                    </StatusBadge>
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge tone={r.maxLevel === "异常" ? "destructive" : "warning"}>
+                      {r.maxLevel}
                     </StatusBadge>
                   </TableCell>
                   <TableCell>
@@ -324,8 +330,11 @@ function RecordDetailSheet({
           <>
             <SheetHeader className="space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <StatusBadge tone={record.level === "异常" ? "destructive" : "warning"} dot={record.level === "异常"}>
-                  {record.level}
+                <StatusBadge tone={record.currentLevel === "异常" ? "destructive" : "warning"} dot={record.currentLevel === "异常"}>
+                  当前 {record.currentLevel}
+                </StatusBadge>
+                <StatusBadge tone={record.maxLevel === "异常" ? "destructive" : "warning"}>
+                  最高 {record.maxLevel}
                 </StatusBadge>
                 <SheetTitle className="text-lg">{record.assetName} · {record.metric}</SheetTitle>
                 <StatusBadge tone={handleStatusTone(record.status)}>{record.status}</StatusBadge>
@@ -352,16 +361,23 @@ function RecordDetailSheet({
               </div>
             </Section>
 
-            <Section title="来源巡检">
-              <div className="rounded-md border bg-card p-3 text-sm flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{record.sourceRunLabel ?? "—"}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">巡检执行编号 {record.runId}</div>
-                </div>
-                <Button size="sm" variant="outline" className="h-7 text-xs"
-                  onClick={() => { onClose(); window.location.assign(`/inspection?run=${record.runId}`); }}>
-                  查看巡检详情
-                </Button>
+            <Section title={`巡检命中记录（${record.inspectionHits.length} 次）`}>
+              <div className="rounded-md border bg-card divide-y">
+                {record.inspectionHits.map((h, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 text-xs">
+                    <StatusBadge tone={h.level === "异常" ? "destructive" : "warning"}>{h.level}</StatusBadge>
+                    <span className="tabular-nums text-muted-foreground shrink-0">{h.time}</span>
+                    <span className="flex-1 min-w-0 truncate text-foreground/85" title={h.runLabel}>{h.runLabel}</span>
+                    <span className="tabular-nums font-medium">{h.value}</span>
+                    <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]"
+                      onClick={() => { onClose(); window.location.assign(`/inspection?run=${h.runId}`); }}>
+                      查看
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-1.5 text-[11px] text-muted-foreground">
+                最近来源：{record.sourceRunLabel ?? record.runId}
               </div>
             </Section>
 
