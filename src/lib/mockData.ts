@@ -177,17 +177,27 @@ export interface AbnormalRecord {
   id: string;
   taskId: string;              // 来源巡检任务
   runId: string;               // 来源巡检执行
+  sourceRunLabel?: string;     // 来源巡检显示名（方案 · 执行编号）
   assetId: string;
   assetName: string;
   metric: string;
   level: AbnormalLevel;
   value: string;
+  /** @deprecated 使用 triggerRule */
   threshold: string;
+  /** 触发规则（可为阈值 / 连续失败 / 环比等） */
+  triggerRule: string;
+  /** @deprecated 使用 firstSeen / lastSeen */
   time: string;
+  firstSeen: string;
+  lastSeen: string;
+  duration: string;
+  occurrences: number;
   description: string;
   evidenceSnapshot: string;    // 证据快照文字
-  status: "待处理" | "分析中" | "已闭环";
+  status: "待处理" | "分析中" | "已忽略" | "已恢复";
   analysisTaskId?: string;
+  handleLog?: { time: string; actor: string; action: string; note?: string }[];
 }
 
 export interface AnalysisTask {
