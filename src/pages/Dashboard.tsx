@@ -48,7 +48,7 @@ import { Bot, Sparkles, ArrowRight } from "lucide-react";
 const stats = [
   { label: "纳管资产", value: "18", unit: "个", delta: "+2", icon: Server, tone: "info" as const },
   { label: "正常率", value: "75", unit: "%", delta: "-12.5%", icon: CheckCircle2, tone: "success" as const },
-  { label: "待关注事项", value: "5", unit: "项", delta: "+2", icon: TrendingUp, tone: "warning" as const },
+  { label: "异常/关注记录", value: "5", unit: "项", delta: "+2", icon: TrendingUp, tone: "warning" as const },
   { label: "今日 Agent 调用", value: "126", unit: "次", delta: "+18", icon: Bot, tone: "info" as const },
 ];
 
@@ -111,13 +111,13 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* 待关注事项 & Agent 工作情况 */}
+      {/* 异常/关注记录 & Agent 工作情况 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="panel p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="font-semibold flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-warning" /> 待关注事项
+                <AlertTriangle className="h-4 w-4 text-warning" /> 异常/关注记录
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">来自巡检异常与关注记录 · 建议尽快处置</p>
             </div>
