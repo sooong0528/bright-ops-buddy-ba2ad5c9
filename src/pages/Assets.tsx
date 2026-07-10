@@ -295,7 +295,7 @@ export default function Assets() {
         })}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="filter-bar">
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
           <TabsList>
             <TabsTrigger value="全部">全部</TabsTrigger>
@@ -773,7 +773,7 @@ function ObservationEditor({
               </div>
               <div>
                 <h4 className="text-sm font-semibold">关联 Zabbix Host</h4>
-                <p className="text-[11px] text-muted-foreground">选择该资产对应的主 Host，用于采集 Zabbix 指标</p>
+                <p className="text-sm text-muted-foreground">选择该资产对应的主 Host，用于采集 Zabbix 指标</p>
               </div>
             </div>
             {primaryHost && (
@@ -788,7 +788,7 @@ function ObservationEditor({
             {/* Host 选择器 */}
             <div className="flex items-end gap-2">
               <div className="flex-1">
-                <Label className="text-[11px] text-muted-foreground">Zabbix Host</Label>
+                <Label className="text-sm text-muted-foreground">Zabbix Host</Label>
                 <Select value={primaryHost ?? ""} onValueChange={(v) => toggleHost(v)}>
                   <SelectTrigger className="h-8 mt-1 text-xs">
                     <SelectValue placeholder="选择 Zabbix Host" />
@@ -808,14 +808,14 @@ function ObservationEditor({
                     {filteredHosts.map((h) => (
                       <SelectItem key={h.name} value={h.name} className="text-xs">
                         <span className="font-mono">{h.name}</span>
-                        <span className="text-[10px] text-muted-foreground ml-2">{h.itemCount} Items</span>
+                        <span className="text-sm text-muted-foreground ml-2">{h.itemCount} Items</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               {primaryHostMeta && (
-                <div className="text-[11px] text-muted-foreground pb-1.5 flex items-center gap-2">
+                <div className="text-sm text-muted-foreground pb-1.5 flex items-center gap-2">
                   <span>共 {primaryHostMeta.itemCount} 个 Item</span>
                   <span className={`flex items-center gap-0.5 ${matchedMetrics === activeMappings.length ? "text-success" : "text-warning"}`}>
                     {matchedMetrics === activeMappings.length ? <CheckCircle2 className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
@@ -832,9 +832,9 @@ function ObservationEditor({
                   <div className="text-xs font-medium flex items-center gap-1.5">
                     <Activity className="h-3.5 w-3.5 text-primary" />
                     推荐巡检项映射
-                    <span className="text-[11px] text-muted-foreground font-normal font-mono">· {primaryHost}</span>
+                    <span className="text-sm text-muted-foreground font-normal font-mono">· {primaryHost}</span>
                   </div>
-                  <span className="text-[11px] text-muted-foreground">系统推荐核心项，用户仅需确认或修正匹配结果</span>
+                  <span className="text-sm text-muted-foreground">系统推荐核心项，用户仅需确认或修正匹配结果</span>
                 </div>
                 <Table>
                   <TableHeader>
@@ -858,7 +858,7 @@ function ObservationEditor({
                           <TableCell className="align-top py-2">
                             <div className="font-medium">{m.metric}</div>
                             {rec?.description && (
-                              <div className="text-[11px] text-muted-foreground mt-0.5">{rec.description}</div>
+                              <div className="text-sm text-muted-foreground mt-0.5">{rec.description}</div>
                             )}
                           </TableCell>
                           <TableCell className="align-top py-2">
@@ -873,7 +873,7 @@ function ObservationEditor({
                                 }}
                               />
                             ) : matched ? (
-                              <Badge variant="secondary" className="text-[11px] font-mono font-normal">
+                              <Badge variant="secondary" className="text-sm font-mono font-normal">
                                 {m.matchedItem}
                               </Badge>
                             ) : (
@@ -882,11 +882,11 @@ function ObservationEditor({
                           </TableCell>
                           <TableCell className="align-top py-2">
                             {matched ? (
-                              <span className="inline-flex items-center gap-0.5 text-success text-[11px]">
+                              <span className="inline-flex items-center gap-0.5 text-success text-sm">
                                 <CheckCircle2 className="h-3 w-3" />已匹配
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-0.5 text-warning text-[11px]">
+                              <span className="inline-flex items-center gap-0.5 text-warning text-sm">
                                 <AlertCircle className="h-3 w-3" />未匹配
                               </span>
                             )}
@@ -904,7 +904,7 @@ function ObservationEditor({
                   </TableBody>
                 </Table>
 
-                <div className="flex items-center border-t px-3 py-2 bg-muted/10 text-[11px]">
+                <div className="flex items-center border-t px-3 py-2 bg-muted/10 text-sm">
                   <button type="button" className="text-primary hover:underline flex items-center gap-1"
                     onClick={() => setCustomOpen((v) => !v)}>
                     <Plus className="h-3 w-3" />添加自定义巡检项
@@ -914,13 +914,13 @@ function ObservationEditor({
                 {customOpen && (
                   <div className="border-t px-3 py-2 bg-background flex gap-2 items-end">
                     <div className="flex-1">
-                      <Label className="text-[11px] text-muted-foreground">巡检项名称</Label>
+                      <Label className="text-sm text-muted-foreground">巡检项名称</Label>
                       <Input value={customMetric.name}
                         onChange={(e) => setCustomMetric((v) => ({ ...v, name: e.target.value }))}
                         placeholder="如：GC 停顿时长" className="h-7 text-xs mt-1" />
                     </div>
                     <div className="flex-1">
-                      <Label className="text-[11px] text-muted-foreground">Zabbix Item</Label>
+                      <Label className="text-sm text-muted-foreground">Zabbix Item</Label>
                       <div className="mt-1">
                         <ItemPicker
                           value={customMetric.item || undefined}
@@ -952,7 +952,7 @@ function ObservationEditor({
               </div>
               <div>
                 <h4 className="text-sm font-semibold">日志源配置</h4>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   资产级配置，独立于 Zabbix Host；已启用 {logSources.filter((l) => l.enabled).length} / {logSources.length}
                 </p>
               </div>
@@ -1088,7 +1088,7 @@ function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: Ed
                   <div key={h} className="rounded-lg border bg-card p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-mono text-xs text-primary">{h}</span>
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className="text-sm text-muted-foreground">
                         {matched}/{mappings.length} 已匹配
                       </span>
                     </div>
@@ -1096,7 +1096,7 @@ function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: Ed
                       {mappings.map((m) => (
                         <div key={m.metric} className="flex items-start justify-between gap-2 text-xs">
                           <span className="text-foreground/90 flex-shrink-0">{m.metric}</span>
-                          <span className="text-muted-foreground font-mono text-[11px] text-right truncate">
+                          <span className="text-muted-foreground font-mono text-sm text-right truncate">
                             {m.matchedItem ?? "未匹配"}
                           </span>
                         </div>
@@ -1118,10 +1118,10 @@ function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: Ed
                 <div key={i} className="flex items-center justify-between rounded-md border bg-card px-2.5 py-1.5 gap-2">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span className="text-xs font-medium truncate">{l.name}</span>
-                    <Badge variant="outline" className="text-[10px] font-normal">{l.logType}</Badge>
+                    <Badge variant="outline" className="text-sm font-normal">{l.logType}</Badge>
                   </div>
-                  <span className="text-[11px] text-muted-foreground font-mono truncate">{l.filter || "—"}</span>
-                  <span className={`text-[10px] ${l.enabled ? "text-success" : "text-muted-foreground"}`}>
+                  <span className="text-sm text-muted-foreground font-mono truncate">{l.filter || "—"}</span>
+                  <span className={`text-sm ${l.enabled ? "text-success" : "text-muted-foreground"}`}>
                     {l.enabled ? "启用" : "停用"}
                   </span>
                 </div>

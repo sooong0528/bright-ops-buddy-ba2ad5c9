@@ -133,20 +133,23 @@
 
 @layer components {
   .stat-card {
-    @apply relative rounded-xl border bg-card p-5 shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5;
+    @apply relative rounded-lg border bg-card p-5 shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)];
     background-image: var(--gradient-card);
   }
   .stat-card::before {
     content: "";
-    @apply absolute inset-x-0 top-0 h-px rounded-t-xl;
+    @apply absolute inset-x-0 top-0 h-px rounded-t-lg;
     background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.3), transparent);
   }
   .panel {
-    @apply rounded-xl border bg-card shadow-[var(--shadow-sm)];
+    @apply rounded-lg border bg-card shadow-[var(--shadow-sm)];
     background-image: var(--gradient-card);
   }
   .panel-flat {
-    @apply rounded-xl border bg-card;
+    @apply rounded-lg border bg-card;
+  }
+  .filter-bar {
+    @apply flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3 shadow-[var(--shadow-sm)];
   }
   .data-grid {
     background-image: linear-gradient(hsl(var(--border) / 0.6) 1px, transparent 1px),

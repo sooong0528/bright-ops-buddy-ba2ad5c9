@@ -217,7 +217,7 @@ export default function InspectionAdmin() {
   return (
     <div className="space-y-4">
       {/* 筛选栏 + 新建 */}
-      <div className="panel p-4 flex flex-wrap items-center gap-3">
+      <div className="filter-bar">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input value={keyword} onChange={(e) => setKeyword(e.target.value)}
@@ -590,15 +590,18 @@ function SchemeEditorSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-[1080px] p-0 overflow-hidden flex flex-col">
-        <SheetHeader className="px-6 pt-6 pb-3 border-b">
-          <SheetTitle className="text-base">{isEdit ? "编辑巡检方案" : "新增巡检方案"}</SheetTitle>
+      <SheetContent className="w-full sm:max-w-[820px] p-0 overflow-hidden flex flex-col">
+        <SheetHeader className="px-5 pt-5 pb-3 border-b">
+          <SheetTitle className="flex items-center gap-2 text-base">
+            <span>{isEdit ? "编辑巡检方案" : "新增巡检方案"}</span>
+            <StatusBadge tone={form.enabled ? "success" : "muted"}>{form.enabled ? "启用" : "停用"}</StatusBadge>
+          </SheetTitle>
           <SheetDescription className="text-xs">
             巡检方案面向资产配置，不直接选择原始 Zabbix Item。具体 Item 来自「资产管理 → 观测接入」。
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* AI 助手 */}
           <div className="rounded-lg border border-primary/20 bg-primary-soft/30 p-3 space-y-2">
             <div className="flex items-center justify-between gap-2">
@@ -656,10 +659,6 @@ function SchemeEditorSheet({
                 <Label className="text-xs">方案说明</Label>
                 <Textarea className="mt-1.5" rows={2} placeholder="用于生产主机基础资源巡检"
                   value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-              </div>
-              <div className="col-span-2 flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                <Label className="text-xs">启用该方案</Label>
-                <Switch checked={form.enabled} onCheckedChange={(v) => setForm({ ...form, enabled: v })} />
               </div>
             </div>
           </Section>
@@ -723,8 +722,8 @@ function SchemeEditorSheet({
                         <label key={a.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-secondary/40">
                           <Checkbox checked={on} onCheckedChange={() => toggleAssetId(a.id)} />
                           <div className="flex-1 min-w-0">
-                            <div className="truncate font-medium text-[13px]">{a.name}</div>
-                            <div className="text-[11px] text-muted-foreground truncate">
+                            <div className="truncate font-medium text-sm">{a.name}</div>
+                            <div className="text-sm text-muted-foreground truncate">
                               {a.businessSystem} · {a.ip} · {a.environment}
                             </div>
                           </div>
@@ -759,10 +758,10 @@ function SchemeEditorSheet({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[80px]">启用</TableHead>
-                    <TableHead>巡检项</TableHead>
-                    <TableHead>关注条件</TableHead>
-                    <TableHead>异常条件</TableHead>
+                    <TableHead className="w-[72px]">启用</TableHead>
+                    <TableHead className="w-[220px]">巡检项</TableHead>
+                    <TableHead className="w-[180px]">关注条件</TableHead>
+                    <TableHead className="w-[180px]">异常条件</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -773,13 +772,13 @@ function SchemeEditorSheet({
                       </TableCell>
                       <TableCell>
                         <div className="text-sm font-medium">{item.name}</div>
-                        {item.optional && <span className="text-[11px] text-muted-foreground">可选</span>}
+                        {item.optional && <span className="text-sm text-muted-foreground">可选</span>}
                       </TableCell>
                       <TableCell>
-                        <Input className="h-8 w-32" value={item.warn} onChange={(e) => updateCheckItem(item.key, { warn: e.target.value })} />
+                        <Input className="h-9 w-full" value={item.warn} onChange={(e) => updateCheckItem(item.key, { warn: e.target.value })} />
                       </TableCell>
                       <TableCell>
-                        <Input className="h-8 w-32" value={item.crit} onChange={(e) => updateCheckItem(item.key, { crit: e.target.value })} />
+                        <Input className="h-9 w-full" value={item.crit} onChange={(e) => updateCheckItem(item.key, { crit: e.target.value })} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -912,9 +911,19 @@ function SchemeEditorSheet({
           </Section>
         </div>
 
-        <div className="border-t px-6 py-3 flex justify-end gap-2 bg-background">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button onClick={submit}>{isEdit ? "保存修改" : "创建方案"}</Button>
+        <div className="border-t px-5 py-3 flex items-center justify-between gap-3 bg-background">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="scheme-enabled"
+              checked={form.enabled}
+              onCheckedChange={(enabled) => setForm({ ...form, enabled })}
+            />
+            <Label htmlFor="scheme-enabled" className="cursor-pointer text-sm">启用方案</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+            <Button onClick={submit}>{isEdit ? "保存修改" : "创建方案"}</Button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

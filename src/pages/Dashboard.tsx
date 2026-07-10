@@ -122,7 +122,7 @@ export default function Dashboard() {
               <p className="text-xs text-muted-foreground mt-0.5">来自巡检异常与关注记录 · 建议尽快处置</p>
             </div>
             <Button asChild variant="ghost" size="sm" className="text-xs">
-              <Link to="/inspection?tab=abnormal">更多 <ArrowUpRight className="ml-1 h-3 w-3" /></Link>
+              <Link to="/inspection/abnormal">更多 <ArrowUpRight className="ml-1 h-3 w-3" /></Link>
             </Button>
           </div>
           <div className="space-y-2">

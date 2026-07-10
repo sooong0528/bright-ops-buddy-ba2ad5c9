@@ -145,7 +145,7 @@ export default function Reports() {
       </div>
 
       {/* 工具条 */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="filter-bar">
         <Tabs value={active} onValueChange={(v) => setActive(v as any)}>
           <TabsList>
             <TabsTrigger value="全部">全部</TabsTrigger>

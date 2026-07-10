@@ -107,7 +107,7 @@ export default function AbnormalRecords() {
         <SummaryTile icon={Ban} label="已忽略" value={String(stats.ignored)} tone="muted" />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="filter-bar">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -194,15 +194,15 @@ export default function AbnormalRecords() {
                   <TableCell className="text-xs text-muted-foreground">{r.triggerRule}</TableCell>
                   <TableCell className="text-xs text-muted-foreground tabular-nums">
                     {r.firstSeen}
-                    <div className="text-[11px] text-muted-foreground/70 truncate" title={r.sourceRunLabel}>来源：{r.sourceRunLabel ?? "—"}</div>
+                    <div className="text-sm text-muted-foreground/70 truncate" title={r.sourceRunLabel}>来源：{r.sourceRunLabel ?? "—"}</div>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground tabular-nums">
                     {r.lastSeen}
-                    <div className="text-[11px] text-muted-foreground/70">最近一次巡检命中</div>
+                    <div className="text-sm text-muted-foreground/70">最近一次巡检命中</div>
                   </TableCell>
                   <TableCell className="text-xs tabular-nums">
                     {r.duration}
-                    <div className="text-[11px] text-muted-foreground/70">出现 {r.occurrences} 次</div>
+                    <div className="text-sm text-muted-foreground/70">出现 {r.occurrences} 次</div>
                   </TableCell>
                   <TableCell>
                     <StatusBadge tone={handleStatusTone(r.status)}>{r.status}</StatusBadge>
@@ -312,7 +312,7 @@ function SummaryTile({
       <div className="min-w-0">
         <div className="text-2xl font-semibold tabular-nums leading-none">{value}</div>
         <div className="text-xs text-muted-foreground mt-1 truncate">{sub ?? label}</div>
-        {sub && <div className="text-[11px] text-muted-foreground/80">{label}</div>}
+        {sub && <div className="text-sm text-muted-foreground/80">{label}</div>}
       </div>
     </div>
   );
@@ -374,14 +374,14 @@ function RecordDetailSheet({
                     <span className="tabular-nums text-muted-foreground shrink-0">{h.time}</span>
                     <span className="flex-1 min-w-0 truncate text-foreground/85" title={h.runLabel}>{h.runLabel}</span>
                     <span className="tabular-nums font-medium">{h.value}</span>
-                    <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]"
+                    <Button size="sm" variant="ghost" className="h-6 px-2 text-sm"
                       onClick={() => { onClose(); window.location.assign(`/inspection?run=${h.runId}`); }}>
                       查看
                     </Button>
                   </div>
                 ))}
               </div>
-              <div className="mt-1.5 text-[11px] text-muted-foreground">
+              <div className="mt-1.5 text-sm text-muted-foreground">
                 最近来源：{record.sourceRunLabel ?? record.runId}
               </div>
             </Section>

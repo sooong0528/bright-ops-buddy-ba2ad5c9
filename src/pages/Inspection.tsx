@@ -100,7 +100,7 @@ export default function Inspection() {
         <SummaryTile icon={AlertTriangle} label="产生异常/关注记录" value={String(runStats.abnormal + runStats.attention)} tone="destructive" sub={`异常 ${runStats.abnormal} · 关注 ${runStats.attention}`} />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="filter-bar">
         <div className="flex items-center gap-2">
           <div className="relative">
             <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -220,7 +220,7 @@ function SummaryTile({
       <div className="min-w-0">
         <div className="text-2xl font-semibold tabular-nums leading-none">{value}</div>
         <div className="text-xs text-muted-foreground mt-1 truncate">{sub ?? label}</div>
-        {sub && <div className="text-[11px] text-muted-foreground/80">{label}</div>}
+        {sub && <div className="text-sm text-muted-foreground/80">{label}</div>}
       </div>
     </div>
   );

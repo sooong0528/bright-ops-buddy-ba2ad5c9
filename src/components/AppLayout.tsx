@@ -10,7 +10,7 @@ import type { UserItem } from "@/lib/mockData";
 
 const titleMap: Record<string, { title: string; sub: string }> = {
   "/": { title: "总览驾驶舱", sub: "平台运行态势与关键指标一览" },
-  "/inspection": { title: "巡检中心", sub: "巡检状态、结果与异常追踪" },
+  "/inspection": { title: "巡检结果", sub: "巡检任务执行状态与结果记录" },
   "/analysis": { title: "故障分析", sub: "面向异常与关注记录的辅助研判" },
   "/inspection-admin": { title: "巡检管理", sub: "巡检方案 · 覆盖范围 · 巡检项与异常规则" },
   "/assistant": { title: "智能问答", sub: "知识库问答 · 数据查询 · 上下文追问" },

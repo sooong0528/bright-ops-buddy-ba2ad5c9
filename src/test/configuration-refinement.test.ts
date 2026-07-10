@@ -47,6 +47,17 @@ describe("configuration refinement", () => {
     expect(screen.getByRole("button", { name: "登录" })).toBeInTheDocument();
   });
 
+  it("shows inspection results and abnormal records as first-level navigation", () => {
+    localStorage.setItem("smartops-current-user", "u1");
+    window.history.pushState({}, "", "/");
+
+    render(React.createElement(App));
+
+    expect(screen.getByRole("link", { name: "巡检结果" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "异常记录" })).toBeInTheDocument();
+    expect(screen.queryByText("巡检中心")).not.toBeInTheDocument();
+  });
+
   it("uses searchable item pickers without the all-items preview", () => {
     render(React.createElement(Assets));
 

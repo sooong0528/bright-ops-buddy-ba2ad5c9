@@ -69,7 +69,7 @@ const CATEGORIES: Category[] = [
     short: "追问",
     icon: MessageSquareQuote,
     desc: "针对某份报告 / 巡检结果 / 异常记录进行解读、对比、汇总",
-    guideline: "请先在报告中心或巡检中心打开一条上下文后进入，或直接就当前上下文进行追问。",
+    guideline: "请先在报告中心、巡检结果或异常记录中打开一条上下文后进入，或直接就当前上下文进行追问。",
     color: "text-accent-foreground",
     bg: "bg-accent",
     border: "border-accent",
@@ -149,7 +149,7 @@ export default function Assistant() {
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [active.messages, loading]);
 
-  // 接收来自报告中心 / 巡检中心的「追问」跳转
+  // 接收来自报告中心、巡检结果或异常记录的「追问」跳转
   useEffect(() => {
     const raw = sessionStorage.getItem("assistant.context")
       || sessionStorage.getItem("assistant.pendingReportContext");
@@ -539,7 +539,7 @@ function generateReply(q: string, category: CategoryKey, ctx?: ContextRef): Msg 
 
   // context
   if (!ctx) {
-    return { ...base, content: "请先在报告中心 / 巡检中心 / 故障分析页面打开一条上下文，再返回此处进行追问。" };
+    return { ...base, content: "请先在报告中心 / 巡检结果 / 异常记录 / 故障分析页面打开一条上下文，再返回此处进行追问。" };
   }
   if (/最需要关注|重点|关键/.test(q)) {
     return {
