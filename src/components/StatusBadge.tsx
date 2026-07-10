@@ -33,8 +33,8 @@ export function StatusBadge({ tone = "muted", children, dot = false, className }
 }
 
 export function statusTone(status: string): Tone {
-  if (["正常", "已完成", "成功", "已归档", "已发布", "启用"].includes(status)) return "success";
-  if (["关注", "运行中", "草稿", "警告", "提示"].includes(status)) return "warning";
-  if (["异常", "失败", "停用", "已下架", "严重"].includes(status)) return "destructive";
+  if (["正常", "已完成", "成功", "已确认", "已归档", "已发布", "已生成", "已生成分析结果", "启用", "纳管中", "已纳管", "已匹配"].includes(status)) return "success";
+  if (["关注", "运行中", "草稿", "待分析", "分析中", "待处理", "未发起", "缺项", "警告", "提示", "一般", "待配置", "部分配置", "待完善", "多个候选"].includes(status)) return "warning";
+  if (["异常", "失败", "分析失败", "停用", "已下架", "严重", "紧急", "映射异常", "未匹配"].includes(status)) return "destructive";
   return "muted";
 }

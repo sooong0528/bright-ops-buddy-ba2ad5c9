@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   CheckCircle2,
   AlertCircle,
@@ -7,6 +7,8 @@ import {
   RefreshCw,
   Search,
   ListChecks,
+  Bot,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,14 +33,16 @@ import { RunDetailSheet } from "@/components/RunDetailSheet";
 import {
   inspectionTasks,
   inspectionRuns,
-  alerts,
-  hosts,
+  abnormalRecords,
+  faultAnalysisTasks,
+  inspectionMetricResults,
 } from "@/lib/mockData";
 
 type RangeKey = "today" | "week" | "month";
 
 export default function Inspection() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [range, setRange] = useState<RangeKey>("today");
@@ -79,9 +83,6 @@ export default function Inspection() {
     return { totalRuns, finished, running, failed, normal, attention, abnormal, completionRate };
   }, []);
 
-  // 异常追踪：按主机汇总
-  const abnormalHosts = useMemo(() => hosts.filter((h) => h.status !== "正常"), []);
-
   // Run 详情抽屉：通过 URL ?run=xxx 联动
   const runId = searchParams.get("run");
   const activeRun = runId ? inspectionRuns.find((r) => r.id === runId) ?? null : null;
@@ -98,7 +99,35 @@ export default function Inspection() {
     setSearchParams(next, { replace: false });
   }
 
-  // 当从巡检管理跳转过来时，自动打开 run 抽屉（已经通过 URL 处理）
+  function askAboutRecord(recordId: string) {
+    const record = abnormalRecords.find((item) => item.id === recordId);
+    if (!record) return;
+    const metricResult = inspectionMetricResults.find((item) => item.id === record.metricResultId);
+    sessionStorage.setItem(
+      "assistant.pendingOpsContext",
+      JSON.stringify({
+        source: record.triggerSource,
+        id: record.id,
+        title: `${record.objectLabel} · ${record.abnormalType}`,
+        summary: `${record.metricValue}，阈值 ${record.threshold}。${record.evidenceSnapshot} 来源结果 ${record.metricResultId}`,
+        metric: record.metricValue,
+        threshold: record.threshold,
+        evidenceSnapshot: record.evidenceSnapshot,
+        logEvidence: metricResult?.logEvidence
+          ? [`${metricResult.logEvidence.path} · ${metricResult.logEvidence.keywords.join("、")} 命中 ${metricResult.logEvidence.hitCount} 条`]
+          : [],
+        returnPath: `/inspection?run=${encodeURIComponent(record.sourceRunId)}`,
+      }),
+    );
+    navigate("/assistant");
+  }
+
+  function openAnalysis(recordId: string) {
+    const task = faultAnalysisTasks.find((item) => item.abnormalRecordId === recordId);
+    navigate(task ? `/fault-analysis/${task.id}` : "/fault-analysis");
+  }
+
+  // 当从巡检配置跳转过来时，自动打开 run 抽屉（已经通过 URL 处理）
   useEffect(() => {
     // no-op: handled by URL
   }, [location.search]);
@@ -109,7 +138,7 @@ export default function Inspection() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">巡检中心</h2>
-          <p className="text-xs text-muted-foreground mt-1">查看巡检状态、结果与异常追踪 · 面向运维与值班人员</p>
+          <p className="text-xs text-muted-foreground mt-1">查看巡检结果、关注项和异常记录</p>
         </div>
         <div className="flex items-center gap-2">
           <Tabs value={range} onValueChange={(v) => setRange(v as RangeKey)}>
@@ -126,12 +155,12 @@ export default function Inspection() {
       {/* 巡检状态总览 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <SummaryTile icon={ListChecks} label="巡检完成率" value={`${stats.completionRate}%`} tone="info" sub={`已完成 ${stats.finished} / 共 ${stats.totalRuns} 次`} />
-        <SummaryTile icon={CheckCircle2} label="主机正常项" value={String(stats.normal)} tone="success" />
+        <SummaryTile icon={CheckCircle2} label="正常项" value={String(stats.normal)} tone="success" />
         <SummaryTile icon={AlertCircle} label="关注项" value={String(stats.attention)} tone="warning" />
         <SummaryTile icon={AlertTriangle} label="异常项" value={String(stats.abnormal)} tone="destructive" />
       </div>
 
-      {/* 主内容：巡检结果 + 异常追踪 */}
+      {/* 主内容：巡检结果 + 异常/关注记录 */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* 巡检结果列表 */}
         <div className="panel xl:col-span-2">
@@ -222,71 +251,55 @@ export default function Inspection() {
           </Table>
         </div>
 
-        {/* 右侧：异常追踪 + 巡检发现的告警 */}
-        <div className="space-y-4">
-          {/* 异常追踪 */}
-          <div className="panel p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-sm">异常追踪</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">需要关注与处置的主机</p>
-              </div>
-              <span className="text-xs text-muted-foreground tabular-nums">共 {abnormalHosts.length} 台</span>
-            </div>
-
-            <div className="space-y-2">
-              {abnormalHosts.length === 0 ? (
-                <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
-                  当前无异常 ✓
-                </div>
-              ) : (
-                abnormalHosts.map((h) => (
-                  <div key={h.id} className="rounded-lg border bg-card p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium truncate">{h.name}</span>
-                      <StatusBadge tone={statusTone(h.status)} dot={h.status === "异常"}>{h.status}</StatusBadge>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">{h.ip} · {h.group}</div>
-                    <div className="mt-2 grid grid-cols-4 gap-2 text-xs tabular-nums text-muted-foreground">
-                      <span>CPU <span className="text-foreground">{h.cpu}%</span></span>
-                      <span>内存 <span className="text-foreground">{h.memory}%</span></span>
-                      <span>磁盘 <span className="text-foreground">{h.disk}%</span></span>
-                      <span>Ping <span className="text-foreground">{h.ping > 100 ? "超时" : `${h.ping}ms`}</span></span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* 巡检发现的告警 */}
+        <div>
           <div className="panel p-5 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-destructive" />
-                <h3 className="font-semibold text-sm">巡检发现的告警</h3>
+                <h3 className="font-semibold text-sm">异常/关注记录池</h3>
               </div>
-              <span className="text-xs text-muted-foreground tabular-nums">共 {alerts.length} 条</span>
+              <span className="text-xs text-muted-foreground tabular-nums">共 {abnormalRecords.length} 条</span>
             </div>
             <div className="space-y-2">
-              {alerts.length === 0 ? (
+              {abnormalRecords.length === 0 ? (
                 <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
-                  当前无告警 ✓
+                  当前无异常/关注记录
                 </div>
               ) : (
-                alerts.map((a) => (
-                  <div key={a.id} className="rounded-lg border-l-2 border-destructive bg-destructive-soft/30 p-3">
+                abnormalRecords.map((record) => {
+                  const analysis = faultAnalysisTasks.find((item) => item.abnormalRecordId === record.id);
+                  const borderClass = record.triggerSource === "巡检异常"
+                    ? "border-destructive bg-destructive-soft/30"
+                    : "border-warning bg-warning-soft/30";
+                  return (
+                  <div key={record.id} className={`rounded-lg border-l-2 ${borderClass} p-3`}>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold truncate">{a.host} · {a.metric}</span>
-                      <StatusBadge tone={statusTone(a.severity)}>{a.severity}</StatusBadge>
+                      <span className="text-xs font-semibold truncate">{record.id} · {record.abnormalType}</span>
+                      <StatusBadge tone={statusTone(record.severity)}>{record.severity}</StatusBadge>
                     </div>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      <StatusBadge tone={record.triggerSource === "巡检异常" ? "destructive" : "warning"}>{record.triggerSource}</StatusBadge>
+                      <StatusBadge tone={statusTone(record.analysisLinkStatus)}>分析：{record.analysisLinkStatus}</StatusBadge>
+                      <StatusBadge tone={statusTone(record.handlingStatus)}>处理：{record.handlingStatus}</StatusBadge>
+                    </div>
+                    <p className="text-xs text-foreground/80 mt-1.5 leading-relaxed">{record.objectLabel}</p>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      当前值：<span className="text-foreground font-medium tabular-nums">{a.value}</span>
+                      指标：<span className="text-foreground font-medium tabular-nums">{record.metricValue}</span> · 阈值 {record.threshold}
                     </div>
-                    <p className="text-xs text-foreground/80 mt-1.5 leading-relaxed">{a.description}</p>
-                    <p className="text-xs text-muted-foreground mt-1.5 tabular-nums">{a.time}</p>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      {analysis ? `分析任务 ${analysis.taskNo}` : "尚未生成分析任务"}
+                    </p>
+                    <div className="flex gap-2 mt-2">
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openAnalysis(record.id)}>
+                        <ShieldAlert className="h-3.5 w-3.5 mr-1" />{analysis ? "查看分析" : "发起分析"}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => askAboutRecord(record.id)}>
+                        <Bot className="h-3.5 w-3.5 mr-1" />基于此记录提问
+                      </Button>
+                    </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

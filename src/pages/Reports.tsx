@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   FileText, Download, Plus, Calendar, Filter,
   ShieldCheck, AlertTriangle, BookOpen, TrendingUp,
   Sparkles, Search, Star, Archive, MessageSquare, StickyNote, ArchiveRestore, MoreHorizontal,
+  LayoutGrid, List,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
@@ -14,6 +15,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
 import { reports, type ReportItem, type ReportCategory } from "@/lib/mockData";
 import {
@@ -31,19 +35,19 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 const categoryMeta: Record<ReportCategory, { icon: any; color: string; bg: string; desc: string }> = {
-  巡检质量报告: {
+  巡检报告: {
     icon: ShieldCheck,
     color: "text-primary",
     bg: "bg-primary-soft",
     desc: "聚焦巡检完成率、覆盖率与异常项分布",
   },
-  风险研判报告: {
+  故障分析报告: {
     icon: AlertTriangle,
     color: "text-warning",
     bg: "bg-warning/10",
-    desc: "聚焦异常分析、风险判断与重点关注对象",
+    desc: "聚焦来源异常、原因假设、处置建议与人工处理结果",
   },
-  知识服务报告: {
+  知识服务情况分析报告: {
     icon: BookOpen,
     color: "text-info",
     bg: "bg-info/10",
@@ -58,12 +62,15 @@ interface ReportMeta {
 }
 
 export default function Reports() {
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [active, setActive] = useState<"全部" | ReportCategory>("全部");
   const [keyword, setKeyword] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [viewMode, setViewMode] = useState<"card" | "list">("card");
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
+  const [reportQuestion, setReportQuestion] = useState("这份报告最需要关注的问题是什么？");
+  const [reportAnswer, setReportAnswer] = useState("");
 
   // 用户侧标记（备注/重要/归档）—— 仅前端演示
   const [meta, setMeta] = useState<Record<string, ReportMeta>>({});
@@ -86,20 +93,27 @@ export default function Reports() {
   const selected = openId ? reports.find((r) => r.id === openId) ?? null : null;
   const selMeta = selected ? getMeta(selected.id) : null;
 
+  useEffect(() => {
+    const reportId = searchParams.get("report");
+    if (reportId && reports.some((item) => item.id === reportId)) {
+      setOpenId(reportId);
+    }
+  }, [searchParams]);
+
   const stats = useMemo(() => {
     const visible = reports.filter((r) => !getMeta(r.id).archived);
     return {
       total: visible.length,
-      quality: visible.filter((r) => r.category === "巡检质量报告").length,
-      risk: visible.filter((r) => r.category === "风险研判报告").length,
-      knowledge: visible.filter((r) => r.category === "知识服务报告").length,
+      quality: visible.filter((r) => r.category === "巡检报告").length,
+      risk: visible.filter((r) => r.category === "故障分析报告").length,
+      knowledge: visible.filter((r) => r.category === "知识服务情况分析报告").length,
       archivedCount: reports.length - visible.length,
     };
   }, [meta]);
 
-  const handleExport = (r: ReportItem, e?: React.MouseEvent) => {
+  const handleExport = (r: ReportItem, format: "PDF" | "Word" = "PDF", e?: React.MouseEvent) => {
     e?.stopPropagation();
-    toast({ title: "已开始导出", description: `${r.title} · PDF` });
+    toast({ title: "已开始导出", description: `${r.title} · ${format}，当前为前端演示反馈` });
   };
 
   const handleToggleImportant = (r: ReportItem) => {
@@ -127,11 +141,9 @@ export default function Reports() {
   };
 
   const handleFollowup = (r: ReportItem) => {
-    sessionStorage.setItem(
-      "assistant.pendingReportContext",
-      JSON.stringify({ id: r.id, title: r.title, type: r.category.replace("报告", "") }),
-    );
-    navigate("/assistant");
+    setOpenId(r.id);
+    setReportQuestion("这份报告最需要关注的问题是什么？");
+    setReportAnswer(buildReportAnswer(r, "这份报告最需要关注的问题是什么？"));
   };
 
   return (
@@ -139,9 +151,9 @@ export default function Reports() {
       {/* 顶部统计概览 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <SummaryCard label={showArchived ? "已归档报告" : "本月报告总数"} value={showArchived ? stats.archivedCount : stats.total} icon={FileText} tone="primary" />
-        <SummaryCard label="巡检质量报告" value={stats.quality} icon={ShieldCheck} tone="success" hint="日报 / 周报" />
-        <SummaryCard label="风险研判报告" value={stats.risk} icon={AlertTriangle} tone="warning" hint="周报" />
-        <SummaryCard label="知识服务报告" value={stats.knowledge} icon={BookOpen} tone="info" hint="月报" />
+        <SummaryCard label="巡检报告" value={stats.quality} icon={ShieldCheck} tone="success" hint="日报 / 周报" />
+        <SummaryCard label="故障分析报告" value={stats.risk} icon={AlertTriangle} tone="warning" hint="任务生成" />
+        <SummaryCard label="知识服务情况分析报告" value={stats.knowledge} icon={BookOpen} tone="info" hint="月报" />
       </div>
 
       {/* 工具条 */}
@@ -149,9 +161,9 @@ export default function Reports() {
         <Tabs value={active} onValueChange={(v) => setActive(v as any)}>
           <TabsList>
             <TabsTrigger value="全部">全部</TabsTrigger>
-            <TabsTrigger value="巡检质量报告">巡检质量</TabsTrigger>
-            <TabsTrigger value="风险研判报告">风险研判</TabsTrigger>
-            <TabsTrigger value="知识服务报告">知识服务</TabsTrigger>
+            <TabsTrigger value="巡检报告">巡检报告</TabsTrigger>
+            <TabsTrigger value="故障分析报告">故障分析</TabsTrigger>
+            <TabsTrigger value="知识服务情况分析报告">知识服务</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="flex items-center gap-2 flex-wrap">
@@ -175,6 +187,28 @@ export default function Reports() {
             <Input placeholder="选择日期范围" className="w-44 pl-8 h-9" />
           </div>
           <Button variant="outline" size="sm"><Filter className="h-4 w-4 mr-1" />筛选</Button>
+          <div className="flex items-center rounded-md border bg-card p-0.5">
+            <Button
+              type="button"
+              variant={viewMode === "card" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setViewMode("card")}
+              aria-label="卡片视图"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setViewMode("list")}
+              aria-label="列表视图"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
           <Button size="sm"><Plus className="h-4 w-4 mr-1" />生成报告</Button>
         </div>
       </div>
@@ -184,6 +218,16 @@ export default function Reports() {
         <div className="panel p-12 text-center text-sm text-muted-foreground">
           {showArchived ? "暂无已归档报告" : "没有匹配的报告"}
         </div>
+      ) : viewMode === "list" ? (
+        <ReportList
+          items={filtered}
+          getMeta={getMeta}
+          onOpen={(id) => setOpenId(id)}
+          onExport={handleExport}
+          onFollowup={handleFollowup}
+          onToggleImportant={handleToggleImportant}
+          onArchive={handleArchive}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map((r) => {
@@ -236,7 +280,7 @@ export default function Reports() {
                             <Download className="h-4 w-4 mr-2" />导出
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleFollowup(r); }}>
-                            <MessageSquare className="h-4 w-4 mr-2" />追问
+                            <MessageSquare className="h-4 w-4 mr-2" />报告追问
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleToggleImportant(r); }}>
                             <Star className={cn("h-4 w-4 mr-2", m.important && "fill-warning text-warning")} />
@@ -262,7 +306,14 @@ export default function Reports() {
       )}
 
       {/* 右侧抽屉：报告详情 */}
-      <Sheet open={!!selected} onOpenChange={(o) => !o && setOpenId(null)}>
+      <Sheet open={!!selected} onOpenChange={(o) => {
+        if (!o) {
+          setOpenId(null);
+          const next = new URLSearchParams(searchParams);
+          next.delete("report");
+          setSearchParams(next, { replace: true });
+        }
+      }}>
         <SheetContent className="w-full sm:max-w-3xl overflow-y-auto p-0">
           {selected && selMeta && (
             <>
@@ -275,15 +326,24 @@ export default function Reports() {
                   report={selected}
                   important={selMeta.important}
                   archived={selMeta.archived}
-                  onExport={() => handleExport(selected)}
+                  onExportPdf={() => handleExport(selected, "PDF")}
+                  onExportWord={() => handleExport(selected, "Word")}
                   onFollowup={() => handleFollowup(selected)}
                   onToggleImportant={() => handleToggleImportant(selected)}
                   onArchive={() => handleArchive(selected)}
                 />
                 <div className="mt-5 space-y-5 text-sm leading-relaxed">
-                  {selected.category === "巡检质量报告" && <QualityReport report={selected} />}
-                  {selected.category === "风险研判报告" && <RiskReport report={selected} />}
-                  {selected.category === "知识服务报告" && <KnowledgeReport report={selected} />}
+                  {selected.category === "巡检报告" && <QualityReport report={selected} />}
+                  {selected.category === "故障分析报告" && <RiskReport report={selected} />}
+                  {selected.category === "知识服务情况分析报告" && <KnowledgeReport report={selected} />}
+
+                  <ReportFollowup
+                    report={selected}
+                    question={reportQuestion}
+                    answer={reportAnswer}
+                    onQuestionChange={setReportQuestion}
+                    onAsk={() => setReportAnswer(buildReportAnswer(selected, reportQuestion))}
+                  />
 
                   {/* 人工备注 */}
                   <Section title={<span className="flex items-center gap-1.5"><StickyNote className="h-4 w-4 text-primary" />人工备注</span>}>
@@ -294,13 +354,13 @@ export default function Reports() {
                       className="min-h-[88px] text-sm"
                     />
                     <p className="text-xs text-muted-foreground mt-1.5">
-                      备注会随报告一并归档留痕,仅当前用户可见。
+                      备注将随报告归档留痕，仅当前用户可见。
                     </p>
                   </Section>
 
                   <div className="rounded-lg bg-muted/40 border border-dashed p-3 text-xs text-muted-foreground flex items-start gap-2">
                     <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
-                    <span>本报告由报告生成 Agent 自动整理,已存入审计留痕。如需修改,请由具备相应权限的用户在草稿状态下进行调整。</span>
+                    <span>本报告由报告生成服务整理，已记录审计留痕。如需修改，请由具备相应角色的用户在草稿状态下调整。</span>
                   </div>
                 </div>
               </div>
@@ -328,15 +388,162 @@ export default function Reports() {
   );
 }
 
+function ReportList({
+  items,
+  getMeta,
+  onOpen,
+  onExport,
+  onFollowup,
+  onToggleImportant,
+  onArchive,
+}: {
+  items: ReportItem[];
+  getMeta: (id: string) => ReportMeta;
+  onOpen: (id: string) => void;
+  onExport: (report: ReportItem, format?: "PDF" | "Word", event?: React.MouseEvent) => void;
+  onFollowup: (report: ReportItem) => void;
+  onToggleImportant: (report: ReportItem) => void;
+  onArchive: (report: ReportItem) => void;
+}) {
+  return (
+    <div className="panel overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>报告名称</TableHead>
+            <TableHead>类型</TableHead>
+            <TableHead>周期</TableHead>
+            <TableHead>状态</TableHead>
+            <TableHead>生成时间</TableHead>
+            <TableHead className="text-right">操作</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.map((report) => {
+            const meta = getMeta(report.id);
+            return (
+              <TableRow key={report.id} className="hover:bg-secondary/40 cursor-pointer" onClick={() => onOpen(report.id)}>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    {meta.important && <Star className="h-3.5 w-3.5 fill-warning text-warning shrink-0" />}
+                    <span className="font-medium text-sm">{report.title}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{report.reportNo}</p>
+                </TableCell>
+                <TableCell><StatusBadge tone="info">{report.category}</StatusBadge></TableCell>
+                <TableCell className="text-xs text-muted-foreground">{report.period}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1.5">
+                    <StatusBadge tone={statusTone(report.status)}>{report.status}</StatusBadge>
+                    {meta.archived && <StatusBadge tone="muted">已归档</StatusBadge>}
+                  </div>
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground tabular-nums">{report.generatedAt}</TableCell>
+                <TableCell className="text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(event) => event.stopPropagation()}>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" aria-label="更多操作">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+                      <DropdownMenuItem onClick={(event) => onExport(report, "PDF", event)}>
+                        <Download className="h-4 w-4 mr-2" />导出
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onFollowup(report)}>
+                        <MessageSquare className="h-4 w-4 mr-2" />报告追问
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onToggleImportant(report)}>
+                        <Star className={cn("h-4 w-4 mr-2", meta.important && "fill-warning text-warning")} />
+                        {meta.important ? "取消重要" : "标记重要"}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => onArchive(report)}>
+                        {meta.archived ? (
+                          <><ArchiveRestore className="h-4 w-4 mr-2" />恢复</>
+                        ) : (
+                          <><Archive className="h-4 w-4 mr-2" />归档</>
+                        )}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function buildReportAnswer(report: ReportItem, question: string) {
+  if (report.category === "故障分析报告") {
+    return `基于《${report.title}》，当前重点是 app-svc-01 的磁盘水位和日志增长趋势。建议先确认 /data/logs 占用目录，再核对日志轮转是否失效；处理后观察 30 分钟指标是否回落。`;
+  }
+  if (report.category === "巡检报告") {
+    return `基于《${report.title}》，需要优先关注未闭环异常项、失败巡检任务原因，以及是否有重复出现的主机或指标。问题「${question}」可继续追问具体对象。`;
+  }
+  return `基于《${report.title}》，建议优先补齐高频未命中的 SOP 和故障案例，再复核本月新增知识是否已被问答引用。`;
+}
+
+function ReportFollowup({
+  report,
+  question,
+  answer,
+  onQuestionChange,
+  onAsk,
+}: {
+  report: ReportItem;
+  question: string;
+  answer: string;
+  onQuestionChange: (value: string) => void;
+  onAsk: () => void;
+}) {
+  return (
+    <Section title={<span className="flex items-center gap-1.5"><MessageSquare className="h-4 w-4 text-primary" />报告追问</span>}>
+      <div className="space-y-3">
+        <Textarea
+          value={question}
+          onChange={(event) => onQuestionChange(event.target.value)}
+          placeholder={`针对《${report.title}》继续提问`}
+          className="min-h-[72px] text-sm"
+        />
+        <div className="flex justify-end">
+          <Button size="sm" onClick={onAsk}>
+            <Sparkles className="h-4 w-4 mr-1" />追问
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <StatusBadge tone="info">报告追问服务</StatusBadge>
+          <span>追问将记录到审计留痕</span>
+          <span className="font-mono">{report.auditTraceId ? `${report.auditTraceId}-RPT01` : "TRACE-REPORT-FOLLOWUP"}</span>
+        </div>
+        {answer && (
+          <div className="rounded-lg border bg-primary-soft/30 p-3 text-sm leading-relaxed space-y-2">
+            <p>{answer}</p>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground pt-2 border-t border-primary/10">
+              <StatusBadge tone="info">报告追问服务</StatusBadge>
+              <span>已记录到审计留痕</span>
+              <span className="font-mono">{report.auditTraceId ? `${report.auditTraceId}-RPT01` : "TRACE-REPORT-FOLLOWUP"}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 /* ---------- 报告头 ---------- */
 function ReportHeader({
   report, important, archived,
-  onExport, onFollowup, onToggleImportant, onArchive,
+  onExportPdf, onExportWord, onFollowup, onToggleImportant, onArchive,
 }: {
   report: ReportItem;
   important: boolean;
   archived: boolean;
-  onExport: () => void;
+  onExportPdf: () => void;
+  onExportWord: () => void;
   onFollowup: () => void;
   onToggleImportant: () => void;
   onArchive: () => void;
@@ -357,8 +564,11 @@ function ReportHeader({
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-xl font-semibold leading-snug min-w-0 flex-1">{report.title}</h2>
           <div className="flex items-center gap-1.5 shrink-0">
-            <Button size="sm" onClick={onExport}>
-              <Download className="h-4 w-4 mr-1" />导出
+            <Button size="sm" onClick={onExportPdf}>
+              <Download className="h-4 w-4 mr-1" />PDF
+            </Button>
+            <Button size="sm" variant="outline" onClick={onExportWord}>
+              <Download className="h-4 w-4 mr-1" />Word
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -368,7 +578,7 @@ function ReportHeader({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onFollowup}>
-                  <MessageSquare className="h-4 w-4 mr-2" />追问
+                  <MessageSquare className="h-4 w-4 mr-2" />报告追问
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onToggleImportant}>
                   <Star className={cn("h-4 w-4 mr-2", important && "fill-warning text-warning")} />
@@ -387,14 +597,21 @@ function ReportHeader({
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          {meta.desc} · 周期 {report.period} · 生成于 {report.generatedAt} · 由 {report.author} 输出
+          {meta.desc} · 报告编号 {report.reportNo} · 周期 {report.period} · 生成于 {report.generatedAt} · 由 {report.author} 输出
         </p>
+        {(report.sourceTaskNo || report.auditTraceId || report.handlingSummary) && (
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            {report.sourceTaskNo && <StatusBadge tone="info">来源任务 {report.sourceTaskNo}</StatusBadge>}
+            {report.auditTraceId && <StatusBadge tone="muted">Trace {report.auditTraceId}</StatusBadge>}
+            {report.handlingSummary && <StatusBadge tone={report.handlingStatus === "待处理" ? "warning" : statusTone(report.handlingStatus ?? "")}>{report.handlingSummary}</StatusBadge>}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/* ---------- 巡检质量报告 ---------- */
+/* ---------- 巡检报告 ---------- */
 function QualityReport({ report }: { report: ReportItem }) {
   const q = report.quality!;
   const distData = [
@@ -471,22 +688,30 @@ function QualityReport({ report }: { report: ReportItem }) {
   );
 }
 
-/* ---------- 风险研判报告 ---------- */
+/* ---------- 故障分析报告 ---------- */
 function RiskReport({ report }: { report: ReportItem }) {
   const r = report.risk!;
   const levelTone = r.riskLevel === "高" ? "destructive" : r.riskLevel === "中" ? "warning" : "success";
 
   return (
     <>
-      <Section title="一、整体风险评估">
+      <Section title="一、来源与处理状态">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <KpiTile label="来源任务" value={report.sourceTaskNo ?? "—"} hint="故障分析任务" tone="primary" />
+          <KpiTile label="处理结果" value={report.handlingSummary ?? "—"} hint={report.handlingStatus ?? "—"} tone={report.handlingStatus === "待处理" ? "warning" : "success"} />
+          <KpiTile label="审计 Trace" value={report.auditTraceId ?? "—"} hint="可在审计留痕中追溯" tone="info" />
+        </div>
+      </Section>
+
+      <Section title="二、分析摘要">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className={`rounded-lg border p-4 ${levelTone === "destructive" ? "bg-destructive/5 border-destructive/30" : levelTone === "warning" ? "bg-warning/5 border-warning/30" : "bg-success/5 border-success/30"}`}>
-            <p className="text-xs text-muted-foreground mb-1">风险等级</p>
+            <p className="text-xs text-muted-foreground mb-1">建议等级</p>
             <p className={`text-3xl font-bold ${levelTone === "destructive" ? "text-destructive" : levelTone === "warning" ? "text-warning" : "text-success"}`}>{r.riskLevel}</p>
             <p className="text-xs text-muted-foreground mt-1">综合评分 {r.riskScore} / 100</p>
           </div>
           <div className="rounded-lg border bg-card p-4">
-            <p className="text-xs text-muted-foreground mb-1">关键告警</p>
+            <p className="text-xs text-muted-foreground mb-1">关键异常</p>
             <p className="text-3xl font-bold">{r.keyAlerts.length}</p>
             <p className="text-xs text-muted-foreground mt-1">需重点关注</p>
           </div>
@@ -499,7 +724,7 @@ function RiskReport({ report }: { report: ReportItem }) {
         <p className="mt-3 text-foreground/85">{report.summary}</p>
       </Section>
 
-      <Section title="二、关键异常分析">
+      <Section title="三、关键异常分析">
         <div className="space-y-2">
           {r.keyAlerts.map((a, i) => (
             <div key={i} className="rounded-lg border bg-card p-3 flex items-start gap-3">
@@ -522,7 +747,7 @@ function RiskReport({ report }: { report: ReportItem }) {
         </div>
       </Section>
 
-      <Section title="三、根因研判">
+      <Section title="四、原因假设">
         <ul className="space-y-1.5 list-none">
           {r.rootCauses.map((c, i) => (
             <li key={i} className="flex gap-2 items-start text-foreground/85">
@@ -533,7 +758,7 @@ function RiskReport({ report }: { report: ReportItem }) {
         </ul>
       </Section>
 
-      <Section title="四、重点关注对象">
+      <Section title="五、影响对象">
         <div className="flex flex-wrap gap-2">
           {r.focusHosts.map((h) => (
             <span key={h} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md bg-warning/10 border border-warning/30 text-warning font-medium">
@@ -543,7 +768,7 @@ function RiskReport({ report }: { report: ReportItem }) {
         </div>
       </Section>
 
-      <Section title="五、应对建议">
+      <Section title="六、处置建议">
         <ol className="space-y-2 ml-4 list-decimal text-foreground/85">
           {r.recommendations.map((rec, i) => (
             <li key={i} className="text-sm">{rec}</li>
@@ -554,7 +779,7 @@ function RiskReport({ report }: { report: ReportItem }) {
   );
 }
 
-/* ---------- 知识服务报告 ---------- */
+/* ---------- 知识服务情况分析报告 ---------- */
 function KnowledgeReport({ report }: { report: ReportItem }) {
   const k = report.knowledge!;
   return (

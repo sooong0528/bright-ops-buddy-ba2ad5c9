@@ -23,6 +23,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -80,11 +81,15 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
 import { JudgmentRulesPanel } from "@/components/JudgmentRulesPanel";
 import {
+  detectableMetrics,
   inspectionTasks as initialTasks,
+  inspectionTemplates,
   inspectionRuns as initialRuns,
   type InspectionTask,
   type InspectionRun,
+  type OpsAssetType,
 } from "@/lib/mockData";
+import { useOpsData } from "@/lib/opsDataStore";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -102,19 +107,64 @@ type MergeSuggestion = {
   risks: string[];
 };
 
+type InspectionAiResponse = {
+  error?: string;
+  result?: unknown;
+};
+
+function isInspectionTaskType(value: string): value is InspectionTask["type"] {
+  return value === "日常巡检" || value === "周巡检" || value === "手动巡检";
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 async function callInspectionAi(payload: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("inspection-ai", { body: payload });
+  const body = data as InspectionAiResponse | null;
   if (error) {
-    const msg = (data as any)?.error || error.message || "AI 调用失败";
+    const msg = body?.error || error.message || "配置服务调用失败";
     throw new Error(msg);
   }
-  if ((data as any)?.error) throw new Error((data as any).error);
-  return (data as any).result;
+  if (body?.error) throw new Error(body.error);
+  return body?.result;
 }
 
 type Metric = "CPU" | "内存" | "磁盘" | "Ping";
-const METRICS: Metric[] = ["CPU", "内存", "磁盘", "Ping"];
-const TARGET_GROUPS = ["全部主机组", "Web 接入层", "应用服务层", "数据库", "缓存层", "消息中间件"];
+const ASSET_TYPE_TEMPLATE: Record<OpsAssetType, string> = {
+  主机: "tpl-host-basic",
+  数据库: "tpl-db-basic",
+  日志源: "tpl-log-basic",
+};
+
+function selectedMetricNames(templateId: string): Metric[] {
+  const template = inspectionTemplates.find((item) => item.id === templateId);
+  const metricNames = template?.metricIds
+    .map((metricId) => detectableMetrics.find((metric) => metric.id === metricId)?.name)
+    .filter(Boolean) ?? [];
+  return metricNames.map((name) => {
+    if (name?.includes("CPU")) return "CPU";
+    if (name?.includes("内存")) return "内存";
+    if (name?.includes("磁盘")) return "磁盘";
+    return "Ping";
+  });
+}
+
+function metricNamesFromMetricIds(metricIds: string[]): Metric[] {
+  return metricIds.map((metricId) => {
+    const name = detectableMetrics.find((metric) => metric.id === metricId)?.name;
+    if (name?.includes("CPU")) return "CPU";
+    if (name?.includes("内存")) return "内存";
+    if (name?.includes("磁盘")) return "磁盘";
+    return "Ping";
+  });
+}
+
+function assetEndpointLabel(asset: { ip: string; port?: string; logPath?: string }) {
+  if (asset.logPath) return `${asset.ip} ${asset.logPath}`;
+  return asset.port ? `${asset.ip}:${asset.port}` : asset.ip;
+}
 
 export default function InspectionAdmin() {
   const navigate = useNavigate();
@@ -164,7 +214,7 @@ export default function InspectionAdmin() {
       id, taskId: t.id, startTime: fmt, endTime: "—", duration: "进行中",
       status: "运行中", trigger: "手动", operator: "李管理",
       normal: 0, attention: 0, abnormal: 0,
-      summary: "已触发，等待巡检分析 Agent 返回结果...",
+      summary: "已触发，等待巡检分析服务返回结果...",
     };
     setRuns((prev) => [newRun, ...prev]);
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: "运行中", lastRun: fmt } : x)));
@@ -181,7 +231,7 @@ export default function InspectionAdmin() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <TabsList>
             <TabsTrigger value="tasks">巡检任务</TabsTrigger>
-            <TabsTrigger value="rules">巡检判定规则</TabsTrigger>
+            <TabsTrigger value="rules">判定规则</TabsTrigger>
           </TabsList>
           {activeTab === "tasks" ? (
             <Button className="bg-primary" onClick={openCreate}>
@@ -189,7 +239,7 @@ export default function InspectionAdmin() {
             </Button>
           ) : (
             <Button className="bg-primary" onClick={() => setRuleCreateSignal((v) => v + 1)}>
-              <Plus className="h-4 w-4 mr-2" />新增指标规则
+              <Plus className="h-4 w-4 mr-2" />新增判定规则
             </Button>
           )}
         </div>
@@ -199,7 +249,7 @@ export default function InspectionAdmin() {
             <div className="flex items-center justify-between p-5 pb-3">
               <div>
                 <h3 className="font-semibold">巡检任务</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">点击任务名查看任务详情与历史执行；可跳转到具体一次巡检结果</p>
+                <p className="text-xs text-muted-foreground mt-0.5">选择资产和观测配置中已映射的指标/日志观测项，再配置阈值、频率和缺项策略</p>
               </div>
             </div>
 
@@ -207,73 +257,79 @@ export default function InspectionAdmin() {
               <TableHeader>
                 <TableRow>
                   <TableHead>任务名称</TableHead>
-                  <TableHead>类型</TableHead>
+                  <TableHead>巡检模板</TableHead>
+                  <TableHead>巡检对象</TableHead>
                   <TableHead>调度</TableHead>
-                  <TableHead>巡检指标</TableHead>
-                  <TableHead>负责人</TableHead>
+                  <TableHead>指标数量</TableHead>
+                  <TableHead>最近结果</TableHead>
+                  <TableHead>通知对象</TableHead>
                   <TableHead>最近执行</TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tasks.map((t) => (
-                  <TableRow key={t.id} className="hover:bg-secondary/40">
-                    <TableCell>
-                      <button
-                        className="font-medium text-left hover:text-primary transition-colors"
-                        onClick={() => setDetailTaskId(t.id)}
-                      >
-                        {t.name}
-                      </button>
-                      {!t.enabled && <span className="ml-2 text-xs text-muted-foreground">(已停用)</span>}
-                    </TableCell>
-                    <TableCell><StatusBadge tone="info">{t.type}</StatusBadge></TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{t.schedule}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {t.metrics.map((m) => (
-                          <span key={m} className="text-xs rounded bg-secondary px-1.5 py-0.5 text-muted-foreground">{m}</span>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{t.owner}</TableCell>
-                    <TableCell className="text-sm tabular-nums text-muted-foreground">{t.lastRun}</TableCell>
-                    <TableCell>
-                      <StatusBadge tone={statusTone(t.status)} dot={t.status === "运行中"}>{t.status}</StatusBadge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => runNow(t)} disabled={!t.enabled}>
-                          <PlayCircle className="h-4 w-4 mr-1" />执行
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
+                {tasks.map((t) => {
+                  const template = inspectionTemplates.find((item) => item.id === t.templateId);
+                  return (
+                    <TableRow key={t.id} className="hover:bg-secondary/40">
+                        <TableCell>
+                          <button
+                            className="font-medium text-left hover:text-primary transition-colors"
+                            onClick={() => setDetailTaskId(t.id)}
+                          >
+                            {t.name}
+                          </button>
+                          {!t.enabled && <span className="ml-2 text-xs text-muted-foreground">(已停用)</span>}
+                          <div className="text-xs text-muted-foreground mt-0.5">{t.type}</div>
+                        </TableCell>
+                        <TableCell><StatusBadge tone="info">{template?.name ?? "自定义"}</StatusBadge></TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{t.targets.join("、")}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{t.schedule}</TableCell>
+                        <TableCell className="tabular-nums">{template?.metricIds.length ?? t.metrics.length}</TableCell>
+                        <TableCell className="text-xs tabular-nums">
+                          <span className="text-success">正 {t.normal}</span>
+                          <span className="text-warning ml-2">关 {t.attention}</span>
+                          <span className="text-destructive ml-2">异 {t.abnormal}</span>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{t.owner}</TableCell>
+                        <TableCell className="text-sm tabular-nums text-muted-foreground">{t.lastRun}</TableCell>
+                        <TableCell>
+                          <StatusBadge tone={statusTone(t.status)} dot={t.status === "运行中"}>{t.status}</StatusBadge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => runNow(t)} disabled={!t.enabled}>
+                              <PlayCircle className="h-4 w-4 mr-1" />立即执行
                             </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-40">
-                            <DropdownMenuItem onClick={() => setDetailTaskId(t.id)}>
-                              <History className="h-4 w-4 mr-2" />查看详情
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(t)}>
-                              <Pencil className="h-4 w-4 mr-2" />编辑
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleEnabled(t)}>
-                              {t.enabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
-                              {t.enabled ? "停用" : "启用"}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteId(t.id)}>
-                              <Trash2 className="h-4 w-4 mr-2" />删除
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem onClick={() => setDetailTaskId(t.id)}>
+                                  <History className="h-4 w-4 mr-2" />查看详情
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openEdit(t)}>
+                                  <Pencil className="h-4 w-4 mr-2" />编辑
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toggleEnabled(t)}>
+                                  {t.enabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
+                                  {t.enabled ? "停用" : "启用"}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteId(t.id)}>
+                                  <Trash2 className="h-4 w-4 mr-2" />删除
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -332,6 +388,7 @@ function TaskEditorDialog({
   onSave: (data: InspectionTask) => void;
   existingTasks: InspectionTask[];
 }) {
+  const { assets, observationMappings } = useOpsData();
   const isEdit = !!task;
   const [form, setForm] = useState<InspectionTask>(() => emptyForm());
   const [nlOpen, setNlOpen] = useState(false);
@@ -340,6 +397,14 @@ function TaskEditorDialog({
   const [nlReasoning, setNlReasoning] = useState<string>("");
   const [mergeLoading, setMergeLoading] = useState(false);
   const [mergeResult, setMergeResult] = useState<MergeSuggestion | null>(null);
+  const selectedTemplate = inspectionTemplates.find((item) => item.id === form.templateId) ?? inspectionTemplates[0];
+  const selectedAssetType = selectedTemplate.targetAssetTypes[0] ?? "主机";
+  const availableAssets = assets.filter((asset) => selectedTemplate.targetAssetTypes.includes(asset.type));
+  const selectedAssets = availableAssets.filter((asset) => form.targets.includes(asset.name));
+  const mappedMetricIds = Array.from(new Set(selectedAssets.flatMap((asset) =>
+    observationMappings.find((item) => item.assetId === asset.id)?.metricIds ?? [],
+  )));
+  const selectedMetricConfigs = detectableMetrics.filter((metric) => mappedMetricIds.includes(metric.id));
 
   useMemo(() => {
     if (open) {
@@ -350,19 +415,42 @@ function TaskEditorDialog({
   }, [open, task]);
 
   function emptyForm(): InspectionTask {
+    const templateId = "tpl-host-basic";
     return {
-      id: "", name: "", type: "日常巡检", schedule: "每日 08:00",
+      id: "", name: "", type: "日常巡检", templateId, schedule: "每日 08:00",
       lastRun: "—", status: "待运行", normal: 0, attention: 0, abnormal: 0,
-      description: "", targets: ["全部主机组"], metrics: ["CPU", "内存", "磁盘", "Ping"],
+      description: "", targets: assets.filter((asset) => asset.type === "主机").map((asset) => asset.name), metrics: selectedMetricNames(templateId),
       enabled: true, owner: "李管理", createdAt: new Date().toISOString().slice(0, 10),
     };
   }
-
-  function toggleMetric(m: Metric) {
-    setForm((f) => ({ ...f, metrics: f.metrics.includes(m) ? f.metrics.filter((x) => x !== m) : [...f.metrics, m] }));
+  function selectAssetType(assetType: OpsAssetType) {
+    const templateId = ASSET_TYPE_TEMPLATE[assetType];
+    const template = inspectionTemplates.find((item) => item.id === templateId);
+    const nextAssets = assets.filter((asset) => template?.targetAssetTypes.includes(asset.type));
+    setForm((f) => ({
+      ...f,
+      templateId,
+      targets: nextAssets.map((asset) => asset.name),
+      schedule: template?.scheduleSuggestion ?? f.schedule,
+      metrics: selectedMetricNames(templateId),
+    }));
   }
-  function toggleTarget(t: string) {
-    setForm((f) => ({ ...f, targets: f.targets.includes(t) ? f.targets.filter((x) => x !== t) : [...f.targets, t] }));
+
+  function toggleTarget(assetName: string) {
+    setForm((current) => {
+      const targets = current.targets.includes(assetName)
+        ? current.targets.filter((name) => name !== assetName)
+        : [...current.targets, assetName];
+      const nextAssets = availableAssets.filter((asset) => targets.includes(asset.name));
+      const metricIds = Array.from(new Set(nextAssets.flatMap((asset) =>
+        observationMappings.find((item) => item.assetId === asset.id)?.metricIds ?? [],
+      )));
+      return {
+        ...current,
+        targets,
+        metrics: metricNamesFromMetricIds(metricIds),
+      };
+    });
   }
 
   async function handleNlGenerate() {
@@ -373,7 +461,7 @@ function TaskEditorDialog({
       const r = res as ParsedTask;
       setForm((f) => ({
         ...f,
-        name: r.name || f.name, type: (r.type as any) || f.type, schedule: r.schedule || f.schedule,
+        name: r.name || f.name, type: isInspectionTaskType(r.type) ? r.type : f.type, schedule: r.schedule || f.schedule,
         metrics: r.metrics?.length ? r.metrics : f.metrics,
         targets: r.targets?.length ? r.targets : f.targets,
         owner: r.owner || f.owner, description: r.description || f.description,
@@ -382,14 +470,14 @@ function TaskEditorDialog({
       setMergeResult(null);
       toast.success("已根据描述填充任务字段");
       setNlOpen(false);
-    } catch (e: any) {
-      toast.error(e?.message || "AI 生成失败");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "配置生成失败"));
     } finally { setNlLoading(false); }
   }
 
   async function handleMergeCheck() {
     if (!form.name.trim() || form.metrics.length === 0 || form.targets.length === 0) {
-      toast.error("请先完善任务名称、指标与目标，再请 AI 评估");
+      toast.error("请先完善任务名称、指标与目标，再评估规则重叠情况");
       return;
     }
     setMergeLoading(true); setMergeResult(null);
@@ -400,8 +488,8 @@ function TaskEditorDialog({
       }));
       const res = await callInspectionAi({ mode: "merge", draft, existingTasks: peers });
       setMergeResult(res as MergeSuggestion);
-    } catch (e: any) {
-      toast.error(e?.message || "AI 评估失败");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "规则评估失败"));
     } finally { setMergeLoading(false); }
   }
 
@@ -409,16 +497,17 @@ function TaskEditorDialog({
     if (!mergeResult) return;
     const s = mergeResult.suggestedTask;
     setForm((f) => ({
-      ...f, name: s.name, type: s.type as any, schedule: s.schedule,
+      ...f, name: s.name, type: isInspectionTaskType(s.type) ? s.type : f.type, schedule: s.schedule,
       metrics: s.metrics, targets: s.targets, description: s.description,
     }));
-    toast.success("已应用 AI 建议");
+    toast.success("已应用配置建议");
     setMergeResult(null);
   }
 
   function submit() {
     if (!form.name.trim()) { toast.error("请填写任务名称"); return; }
     if (form.metrics.length === 0) { toast.error("请至少选择一项巡检指标"); return; }
+    if (selectedMetricConfigs.length === 0) { toast.error("请先在观测配置中完成观测项映射"); return; }
     if (form.targets.length === 0) { toast.error("请至少选择一个巡检目标"); return; }
     onSave(form);
   }
@@ -431,7 +520,7 @@ function TaskEditorDialog({
         <DialogHeader>
           <DialogTitle>{isEdit ? "编辑巡检任务" : "新建巡检任务"}</DialogTitle>
           <DialogDescription>
-            可手工配置，也可通过自然语言让 AI 生成草稿；保存前可让 AI 评估与现有规则的重叠情况。
+            可手工配置，也可通过自然语言生成配置草稿；保存前可评估与现有规则的重叠情况。
           </DialogDescription>
         </DialogHeader>
 
@@ -439,8 +528,8 @@ function TaskEditorDialog({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-sm">
               <Sparkles className="h-4 w-4 text-primary" />
-              <span className="font-medium">AI 助手</span>
-              <span className="text-xs text-muted-foreground">由 Lovable AI 提供</span>
+              <span className="font-medium">配置助手</span>
+              <span className="text-xs text-muted-foreground">辅助生成配置草稿</span>
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => setNlOpen((v) => !v)}>
@@ -469,7 +558,7 @@ function TaskEditorDialog({
 
           {nlReasoning && !nlOpen && (
             <div className="rounded-md bg-card border p-2.5 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">AI 推断说明：</span>{nlReasoning}
+              <span className="font-medium text-foreground">配置推断说明：</span>{nlReasoning}
             </div>
           )}
 
@@ -486,7 +575,7 @@ function TaskEditorDialog({
 
           <div>
             <Label className="text-sm">任务类型</Label>
-            <Select value={form.type} onValueChange={(v: any) => setForm({ ...form, type: v })}>
+            <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as InspectionTask["type"] })}>
               <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="日常巡检">日常巡检</SelectItem>
@@ -496,40 +585,80 @@ function TaskEditorDialog({
             </Select>
           </div>
           <div>
-            <Label className="text-sm">调度策略</Label>
+            <Label className="text-sm">执行频率</Label>
             <Input className="mt-1.5" placeholder="例如：每日 08:00 / 每 30 分钟" value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} />
           </div>
 
           <div className="col-span-2">
-            <Label className="text-sm">巡检指标</Label>
-            <div className="mt-2 grid grid-cols-4 gap-2">
-              {METRICS.map((m) => (
-                <label key={m} className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm ${
-                  form.metrics.includes(m) ? "border-primary bg-primary-soft/40" : "bg-card hover:bg-secondary/50"
+            <Label className="text-sm">适用资产类型</Label>
+            <Select value={selectedAssetType} onValueChange={(value) => selectAssetType(value as OpsAssetType)}>
+              <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="主机">主机</SelectItem>
+                <SelectItem value="数据库">数据库</SelectItem>
+                <SelectItem value="日志源">日志源</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="col-span-2">
+            <Label className="text-sm">资产范围</Label>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {availableAssets.map((asset) => (
+                <label key={asset.id} className={`flex items-start gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm ${
+                  form.targets.includes(asset.name) ? "border-primary bg-primary-soft/40" : "bg-card hover:bg-secondary/50"
                 }`}>
-                  <Checkbox checked={form.metrics.includes(m)} onCheckedChange={() => toggleMetric(m)} />
-                  {m}
+                  <Checkbox
+                    checked={form.targets.includes(asset.name)}
+                    onCheckedChange={() => toggleTarget(asset.name)}
+                  />
+                  <span>
+                    <span className="font-medium">{asset.name}</span>
+                    <span className="block text-xs text-muted-foreground">{asset.type} · {assetEndpointLabel(asset)}</span>
+                  </span>
                 </label>
               ))}
             </div>
           </div>
 
           <div className="col-span-2">
-            <Label className="text-sm">巡检目标</Label>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {TARGET_GROUPS.map((g) => (
-                <label key={g} className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm ${
-                  form.targets.includes(g) ? "border-primary bg-primary-soft/40" : "bg-card hover:bg-secondary/50"
-                }`}>
-                  <Checkbox checked={form.targets.includes(g)} onCheckedChange={() => toggleTarget(g)} />
-                  {g}
-                </label>
-              ))}
+            <Label className="text-sm">巡检指标</Label>
+            <div className="mt-2 rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>指标名称</TableHead>
+                    <TableHead>指标来源标识</TableHead>
+                    <TableHead>阈值</TableHead>
+                    <TableHead>缺项策略</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedMetricConfigs.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                        当前资产还没有可用观测项，请先到“观测配置”完成 Zabbix Item 或日志源映射。
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {selectedMetricConfigs.map((metric) => metric && (
+                    <TableRow key={metric.id}>
+                      <TableCell>
+                        <div className="font-medium">{metric.name}</div>
+                        <div className="text-xs text-muted-foreground">{metric.dataSource} · {metric.unit}</div>
+                      </TableCell>
+                      <TableCell className="text-xs font-mono text-muted-foreground">{metric.sourceIdentifier}</TableCell>
+                      <TableCell className="text-xs">关注 {metric.attentionThreshold} / 异常 {metric.abnormalThreshold}</TableCell>
+                      <TableCell><StatusBadge tone="warning">{metric.missingPolicy}</StatusBadge></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           </div>
 
           <div>
-            <Label className="text-sm">负责人</Label>
+            <Label className="text-sm">通知对象</Label>
             <Input className="mt-1.5" value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
           </div>
           <div className="flex items-end">
@@ -575,7 +704,7 @@ function MergeSuggestionCard({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Lightbulb className="h-4 w-4 text-warning" />
-          <span className="text-sm font-semibold">AI 评估结果</span>
+          <span className="text-sm font-semibold">规则评估结果</span>
           <StatusBadge tone={v.tone}>{v.label}</StatusBadge>
         </div>
         <Button size="sm" variant="ghost" onClick={onDismiss}><X className="h-4 w-4" /></Button>
@@ -646,6 +775,10 @@ function TaskDetailSheet({
   const successRuns = runs.filter((r) => r.status === "已完成").length;
   const failedRuns = runs.filter((r) => r.status === "失败").length;
   const successRate = totalRuns ? Math.round((successRuns / totalRuns) * 100) : 0;
+  const template = task ? inspectionTemplates.find((item) => item.id === task.templateId) : null;
+  const templateMetrics = template
+    ? template.metricIds.map((metricId) => detectableMetrics.find((metric) => metric.id === metricId)).filter(Boolean)
+    : [];
 
   return (
     <Sheet open={!!task} onOpenChange={(v) => !v && onClose()}>
@@ -669,9 +802,11 @@ function TaskDetailSheet({
 
             <div className="mt-5 grid grid-cols-2 gap-3">
               <InfoTile icon={ListChecks} label="任务类型" value={task.type} />
+              <InfoTile icon={ListChecks} label="巡检模板" value={template?.name ?? "自定义"} />
               <InfoTile icon={Clock} label="调度" value={task.schedule} />
-              <InfoTile icon={UserIcon} label="负责人" value={task.owner} />
+              <InfoTile icon={UserIcon} label="通知对象" value={task.owner} />
               <InfoTile icon={Calendar} label="创建时间" value={task.createdAt} />
+              <InfoTile icon={ListChecks} label="指标数量" value={`${templateMetrics.length || task.metrics.length} 项`} />
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
@@ -680,6 +815,50 @@ function TaskDetailSheet({
               <span className="text-xs text-muted-foreground ml-3">目标：</span>
               {task.targets.map((t) => <span key={t} className="text-xs rounded bg-secondary px-2 py-0.5">{t}</span>)}
             </div>
+
+            {template && (
+              <div className="mt-5 rounded-lg border bg-card p-4 space-y-4">
+                <div>
+                  <h4 className="font-semibold text-sm">配置口径</h4>
+                  <p className="text-xs text-muted-foreground mt-1">{template.description}</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="rounded-md bg-secondary/50 p-3">
+                    <span className="text-muted-foreground">对象范围：</span>{template.targetAssetTypes.join("、")} / {task.targets.join("、")}
+                  </div>
+                  <div className="rounded-md bg-secondary/50 p-3">
+                    <span className="text-muted-foreground">调度与通知：</span>{template.scheduleSuggestion}；{template.notificationRule}
+                  </div>
+                </div>
+                <div className="rounded-md border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>指标项</TableHead>
+                        <TableHead>数据来源</TableHead>
+                        <TableHead>来源标识</TableHead>
+                        <TableHead>阈值</TableHead>
+                        <TableHead>判定窗口</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {templateMetrics.map((metric) => metric && (
+                        <TableRow key={metric.id}>
+                          <TableCell>
+                            <div className="font-medium">{metric.name}</div>
+                            <div className="text-xs text-muted-foreground">{metric.code}</div>
+                          </TableCell>
+                          <TableCell><StatusBadge tone="info">{metric.dataSource}</StatusBadge></TableCell>
+                          <TableCell className="text-xs font-mono text-muted-foreground">{metric.sourceIdentifier}</TableCell>
+                          <TableCell className="text-xs">关注 {metric.attentionThreshold} / 异常 {metric.abnormalThreshold}</TableCell>
+                          <TableCell className="text-xs">{metric.judgeWindow}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
 
             <div className="mt-5 grid grid-cols-3 gap-3">
               <RunStat label="累计执行" value={totalRuns} />
@@ -734,7 +913,7 @@ function TaskDetailSheet({
   );
 }
 
-function InfoTile({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+function InfoTile({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="rounded-lg border bg-card px-3 py-2.5 flex items-center gap-2.5">
       <div className="h-8 w-8 rounded-md bg-primary-soft text-primary flex items-center justify-center">

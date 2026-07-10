@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Send, Sparkles, Bot, User, FileText, Lightbulb,
-  BookOpen, Database, FileBarChart, MessageSquareQuote,
+  BookOpen, Database, MessageSquareQuote,
   Plus, Clock, Quote, BarChart3, AlertTriangle, ShieldAlert, Server,
-  ArrowRight, FileSearch, ChevronDown, Check, X,
+  ArrowRight, FileSearch, ChevronDown, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,8 +13,8 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 
-/* ===================== 四类问答类型定义 ===================== */
-type CategoryKey = "knowledge" | "data" | "report" | "report_followup";
+/* ===================== 问答类型定义 ===================== */
+type CategoryKey = "knowledge" | "data" | "context";
 
 interface Category {
   key: CategoryKey;
@@ -64,37 +65,20 @@ const CATEGORIES: Category[] = [
     ],
   },
   {
-    key: "report",
-    label: "报告生成",
-    short: "报告",
-    icon: FileBarChart,
-    desc: "通过自然语言生成巡检质量 / 风险研判 / 知识服务报告",
-    guideline: "请指定报告类型、时间范围与分析对象，仅支持三类报告：巡检质量、风险研判、知识服务。",
-    color: "text-warning",
-    bg: "bg-warning/10",
-    border: "border-warning/30",
-    examples: [
-      "生成本周巡检质量报告",
-      "帮我生成风险研判周报",
-      "重新生成最近 30 天的知识服务报告",
-      "生成上月数据库主机的巡检质量月报",
-    ],
-  },
-  {
-    key: "report_followup",
-    label: "报告追问",
+    key: "context",
+    label: "上下文追问",
     short: "追问",
     icon: MessageSquareQuote,
-    desc: "针对某份报告进行解读、对比、汇总",
-    guideline: "请先在报告中心打开一份报告，再就该报告内容进行追问。当前演示已绑定一份样例报告。",
+    desc: "基于巡检异常、故障分析等当前数据继续提问",
+    guideline: "请先从巡检异常或故障分析进入，也可描述要追问的系统、指标和处置建议。",
     color: "text-accent-foreground",
     bg: "bg-accent",
     border: "border-accent",
     examples: [
-      "这份报告里最需要关注的三个问题是什么？",
-      "为什么核心交换机被判定为高风险？",
-      "和上周相比有什么变化？",
-      "帮我总结成领导汇报版",
+      "这个异常最可能的根因是什么？",
+      "当前建议是否需要先停服务？",
+      "处理后应该观察哪些指标？",
+      "如果建议不适用，人工记录怎么写？",
     ],
   },
 ];
@@ -110,9 +94,21 @@ interface Msg {
   citations?: Citation[];
   steps?: string[];
   dataRows?: DataRow[];
-  reportCard?: { type: string; range: string; status: string };
   hit?: boolean; // 仅 knowledge 类用：是否命中知识库
   time: string;
+}
+
+interface OpsContext {
+  source: string;
+  id: string;
+  title: string;
+  summary: string;
+  metric?: string;
+  threshold?: string;
+  evidenceSnapshot?: string;
+  logEvidence?: string[];
+  knowledgeCitations?: string[];
+  returnPath?: string;
 }
 
 interface Conversation {
@@ -121,7 +117,7 @@ interface Conversation {
   category: CategoryKey;
   updatedAt: string;
   messages: Msg[];
-  reportContext?: { id: string; title: string; type: string }; // 报告追问上下文
+  opsContext?: OpsContext;
 }
 
 /* ===================== 历史会话（mock） ===================== */
@@ -142,18 +138,22 @@ const initialConversations: Conversation[] = [
   },
   {
     id: "c3",
-    title: "生成本周巡检质量报告",
-    category: "report",
+    title: "营销系统磁盘异常追问",
+    category: "context",
     updatedAt: "昨天",
-    messages: [welcomeMsg("report")],
-  },
-  {
-    id: "c4",
-    title: "风险研判周报追问",
-    category: "report_followup",
-    updatedAt: "2 天前",
-    messages: [welcomeMsg("report_followup")],
-    reportContext: { id: "R-2026-W17", title: "风险研判周报 (2026-W17)", type: "风险研判" },
+    messages: [welcomeMsg("context")],
+    opsContext: {
+      source: "故障分析",
+      id: "FA-20260626-001",
+      title: "营销系统 / app-svc-01 / Nginx · 磁盘空间不足",
+      summary: "建议优先检查 /data/logs 目录占用，确认日志轮转是否失效。",
+      metric: "/data/logs 使用率 92%",
+      threshold: ">=90% 持续 30 分钟",
+      evidenceSnapshot: "Zabbix item vfs.fs.size[/data/logs,pused] 和 error 日志数量同步异常。",
+      logEvidence: ["/data/logs/app/error.log · error/exception/timeout/failed 命中 120 条"],
+      knowledgeCitations: ["磁盘水位告警处理建议（草稿）", "Linux 主机 CPU 高负载排查 SOP"],
+      returnPath: "/fault-analysis/fa-001",
+    },
   },
 ];
 
@@ -174,6 +174,7 @@ function now() {
 
 /* ===================== 主组件 ===================== */
 export default function Assistant() {
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
   const [activeId, setActiveId] = useState<string>(initialConversations[0].id);
   const [input, setInput] = useState("");
@@ -188,21 +189,21 @@ export default function Assistant() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [active.messages, loading]);
 
-  // 接收来自报告中心的「追问」跳转
+  // 接收来自巡检异常、故障分析等业务页面的上下文提问
   useEffect(() => {
-    const raw = sessionStorage.getItem("assistant.pendingReportContext");
+    const raw = sessionStorage.getItem("assistant.pendingOpsContext");
     if (!raw) return;
-    sessionStorage.removeItem("assistant.pendingReportContext");
+    sessionStorage.removeItem("assistant.pendingOpsContext");
     try {
-      const ctx = JSON.parse(raw) as { id: string; title: string; type: string };
+      const ctx = JSON.parse(raw) as OpsContext;
       const id = "c-" + Date.now();
       const conv: Conversation = {
         id,
         title: `追问：${ctx.title}`,
-        category: "report_followup",
+        category: "context",
         updatedAt: "刚刚",
-        messages: [welcomeMsg("report_followup")],
-        reportContext: ctx,
+        messages: [welcomeMsg("context")],
+        opsContext: ctx,
       };
       setConversations((cs) => [conv, ...cs]);
       setActiveId(id);
@@ -220,9 +221,6 @@ export default function Assistant() {
       category: catKey,
       updatedAt: "刚刚",
       messages: [welcomeMsg(catKey)],
-      reportContext: catKey === "report_followup"
-        ? { id: "R-2026-W17", title: "风险研判周报 (2026-W17)", type: "风险研判" }
-        : undefined,
     };
     setConversations((cs) => [conv, ...cs]);
     setActiveId(id);
@@ -238,9 +236,7 @@ export default function Assistant() {
                 ...c,
                 category: catKey,
                 messages: [welcomeMsg(catKey)],
-                reportContext: catKey === "report_followup"
-                  ? { id: "R-2026-W17", title: "风险研判周报 (2026-W17)", type: "风险研判" }
-                  : undefined,
+                opsContext: undefined,
               }
             : c,
         ),
@@ -275,7 +271,7 @@ export default function Assistant() {
     setLoading(true);
 
     setTimeout(() => {
-      const reply = generateReply(q, category, active.reportContext);
+      const reply = generateReply(q, category, active.opsContext);
       setConversations((cs) =>
         cs.map((c) => (c.id === activeId ? { ...c, messages: [...c.messages, reply] } : c)),
       );
@@ -340,8 +336,8 @@ export default function Assistant() {
               <Sparkles className="h-4 w-4 text-primary-foreground" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold">智能问答 Agent</h3>
-              <p className="text-xs text-muted-foreground">辅助决策 · 不直接执行生产写操作 · 全过程留痕</p>
+              <h3 className="text-sm font-semibold">智能问答</h3>
+              <p className="text-xs text-muted-foreground">提供分析建议 · 不执行生产操作 · 全过程留痕</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -355,13 +351,37 @@ export default function Assistant() {
           </div>
         </div>
 
-        {/* 报告追问上下文条 */}
-        {!isWelcome && category === "report_followup" && active.reportContext && (
-          <div className="px-5 py-2 border-b bg-secondary/30 flex items-center gap-2">
-            <FileSearch className="h-4 w-4 text-primary shrink-0" />
-            <span className="text-xs text-muted-foreground">当前追问的报告：</span>
-            <span className="text-xs font-medium">{active.reportContext.title}</span>
-            <StatusBadge tone="info" className="ml-auto">{active.reportContext.type}</StatusBadge>
+        {/* 业务上下文条 */}
+        {!isWelcome && category === "context" && active.opsContext && (
+          <div className="px-5 py-3 border-b bg-secondary/30">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-2 min-w-0">
+                <FileSearch className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground">当前上下文</span>
+                    <StatusBadge tone="info">{active.opsContext.source}</StatusBadge>
+                    <span className="text-xs font-mono text-muted-foreground">{active.opsContext.id}</span>
+                  </div>
+                  <p className="text-sm font-medium mt-1">{active.opsContext.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{active.opsContext.summary}</p>
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                    {active.opsContext.metric && <ContextInfo label="指标" value={active.opsContext.metric} />}
+                    {active.opsContext.threshold && <ContextInfo label="阈值" value={active.opsContext.threshold} />}
+                    {active.opsContext.evidenceSnapshot && <ContextInfo label="证据" value={active.opsContext.evidenceSnapshot} />}
+                    {active.opsContext.logEvidence?.length ? <ContextInfo label="日志" value={active.opsContext.logEvidence.join("；")} /> : null}
+                    {active.opsContext.knowledgeCitations?.length ? <ContextInfo label="知识引用" value={active.opsContext.knowledgeCitations.join("；")} /> : null}
+                  </div>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(active.opsContext?.returnPath ?? "/inspection")}
+              >
+                返回来源
+              </Button>
+            </div>
           </div>
         )}
 
@@ -370,10 +390,10 @@ export default function Assistant() {
           <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-6">
             <div className="w-full max-w-2xl flex flex-col items-center">
               <h1 className="text-3xl font-semibold tracking-wide mb-2 text-foreground">
-                智能问答助手
+                智能问答
               </h1>
               <p className="text-sm text-muted-foreground mb-8">
-                询问运维知识、查询系统数据、生成或解读报告
+                询问运维知识、查询系统数据，或基于当前异常继续追问
               </p>
 
               <ComposerBox
@@ -445,7 +465,7 @@ export default function Assistant() {
               />
               <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                 <Quote className="h-3 w-3" />
-                助手仅提供分析与建议，不直接执行重启服务、修改配置等生产写操作
+                仅提供分析建议，不执行重启服务、修改配置等生产操作
               </p>
             </div>
           </>
@@ -606,22 +626,6 @@ function Message({ msg }: { msg: Msg }) {
           </div>
         )}
 
-        {msg.reportCard && (
-          <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <FileBarChart className="h-4 w-4 text-warning" />
-              <span className="text-sm font-semibold">{msg.reportCard.type}</span>
-              <StatusBadge tone="success" className="ml-auto">{msg.reportCard.status}</StatusBadge>
-            </div>
-            <p className="text-xs text-muted-foreground mb-2">时间范围：{msg.reportCard.range}</p>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="h-7 text-xs">查看报告</Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs">导出 PDF</Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs">归档至报告中心</Button>
-            </div>
-          </div>
-        )}
-
         {msg.citations && (
           <div className="flex flex-wrap gap-1.5">
             {msg.citations.map((c, i) => (
@@ -638,7 +642,7 @@ function Message({ msg }: { msg: Msg }) {
             <span className={`text-xs px-1.5 py-0.5 rounded ${
               msg.hit ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"
             }`}>
-              {msg.hit ? "知识命中" : "未命中（已记入知识缺口）"}
+              {msg.hit ? "知识命中" : "未命中，已记录为知识缺口"}
             </span>
           )}
         </div>
@@ -647,11 +651,20 @@ function Message({ msg }: { msg: Msg }) {
   );
 }
 
-/* ===================== 回复生成（mock，按四类区分） ===================== */
+/* ===================== 回复生成（mock） ===================== */
+function ContextInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border bg-card px-2.5 py-2">
+      <span className="text-muted-foreground">{label}：</span>
+      <span className="text-foreground/85">{value}</span>
+    </div>
+  );
+}
+
 function generateReply(
   q: string,
   category: CategoryKey,
-  reportCtx?: { id: string; title: string; type: string },
+  opsCtx?: OpsContext,
 ): Msg {
   const base = {
     id: "a-" + Date.now(),
@@ -684,7 +697,7 @@ function generateReply(
       ...base,
       hit: false,
       content:
-        "抱歉，当前知识库中未检索到与您问题高度匹配的条目。\n\n本次提问已记入「知识缺口」，将出现在下一份《知识服务月报》中，提示知识管理员补充相关文档。",
+        "抱歉，当前知识库中未检索到与您问题高度匹配的条目。\n\n本次提问已记入「知识缺口」，将出现在下一份《知识服务情况分析报告》中，提示知识管理员补充相关文档。",
     };
   }
 
@@ -726,73 +739,60 @@ function generateReply(
     };
   }
 
-  if (category === "report") {
-    // 识别报告类型
-    let type = "巡检质量报告（周报）";
-    let range = "本周（2026-04-22 ~ 2026-04-29）";
-    if (/风险/.test(q)) type = "风险研判报告（周报）";
-    else if (/知识/.test(q)) {
-      type = "知识服务报告（月报）";
-      range = "最近 30 天（2026-03-30 ~ 2026-04-29）";
-    } else if (/月/.test(q)) range = "最近 30 天";
-
+  if (!opsCtx) {
     return {
       ...base,
-      content: `已根据您的描述匹配报告模板并生成报告，结果已自动归档至报告中心。`,
-      reportCard: { type, range, status: "已生成" },
-    };
-  }
-
-  // report_followup
-  if (!reportCtx) {
-    return {
-      ...base,
-      content: "请先在报告中心打开一份报告，再就该报告内容进行追问。",
+      content: "当前没有绑定具体异常或分析任务。请从巡检异常或故障分析详情进入，或直接描述系统、指标、异常现象。",
     };
   }
   if (/最需要关注|重点|关键/.test(q)) {
     return {
       ...base,
-      content: `针对《${reportCtx.title}》，本周最需要关注的三个问题是：`,
+      content: `针对「${opsCtx.title}」，当前最需要关注的三个问题是：`,
       steps: [
-        "核心交换机 core-sw-01 端口持续抖动，影响 3 个业务系统访问",
-        "数据库主库 db-master-01 内存增长趋势异常，预计 5 天内触达高水位",
-        "MQ 集群消息堆积事件 4 起，需评估消费者扩容",
+        "确认 /data/logs 目录是否持续增长，避免磁盘继续抬升影响服务写日志",
+        "检查日志轮转任务是否失效，重点看 cron、logrotate 配置和最近执行结果",
+        "处理后持续观察磁盘水位、error 日志增量和 Nginx 访问状态",
       ],
-      citations: [{ title: reportCtx.title, category: reportCtx.type }],
+      citations: [{ title: opsCtx.id, category: opsCtx.source }],
     };
   }
   if (/为什么|原因|判定/.test(q)) {
     return {
       ...base,
       content:
-        "核心交换机被判定为高风险的依据：\n\n• 本周 Ping 抖动事件 12 起，超过基线 (≤3)\n• 端口错包数环比上升 38%\n• 影响业务系统数 3 个，覆盖核心交易链路\n\n综合风险评分 92（高）。",
-      citations: [{ title: reportCtx.title, category: reportCtx.type }],
+        "当前优先怀疑日志轮转失效，依据是：\n\n• 异常指标集中在 /data/logs，磁盘水位已达 92%\n• 同期 error 日志增量明显升高\n• 处置建议指向目录占用确认和日志清理，而不是主机整体容量不足\n\n建议先做只读确认，再由人工执行清理或轮转修复。",
+      citations: [{ title: opsCtx.id, category: opsCtx.source }],
     };
   }
-  if (/对比|相比|变化/.test(q)) {
+  if (/观察|恢复|验证|处理后/.test(q)) {
     return {
       ...base,
-      content: "与上周相比的主要变化：",
+      content: "处理后建议观察以下指标：",
       dataRows: [
-        { label: "高风险设备数", value: "2 → 3", tone: "warn" },
-        { label: "异常巡检项", value: "16 → 12（↓25%）" },
-        { label: "新增风险项", value: "core-sw-01 端口抖动", tone: "danger" },
-        { label: "已闭环风险", value: "redis-01 内存泄漏" },
+        { label: "/data/logs 使用率", value: "降至 80% 以下", tone: "warn" },
+        { label: "error 日志增量", value: "连续 30 分钟无异常突增" },
+        { label: "Nginx 访问状态", value: "无 5xx 持续增长" },
+        { label: "巡检复核", value: "重新分析后状态为已完成" },
       ],
     };
   }
-  if (/汇报|总结|领导/.test(q)) {
+  if (/不适用|不正确|其他处理|人工记录/.test(q)) {
     return {
       ...base,
-      content:
-        `《${reportCtx.title}》—— 领导汇报版：\n\n本周整体运行平稳，发现高风险设备 3 台，重点关注核心交换机端口抖动问题，已制定整改计划；异常巡检项较上周下降 25%，知识库支撑效率持续提升。建议本周重点跟进核心交换机硬件巡检。`,
-      citations: [{ title: reportCtx.title, category: reportCtx.type }],
+      content: "如果系统建议不适用，人工处理记录建议包含：",
+      steps: [
+        "选择「未采纳系统建议」或「使用其他处理方式」",
+        "说明未采纳原因，例如根因不在日志目录、业务窗口不允许清理等",
+        "记录实际处理动作、执行人、时间和处理前后截图",
+        "保存后归档，后续可进入知识缺口或案例沉淀",
+      ],
+      citations: [{ title: opsCtx.id, category: opsCtx.source }],
     };
   }
   return {
     ...base,
-    content: `已基于《${reportCtx.title}》分析您的问题。如需更深入解读，可继续追问具体设备或指标。`,
-    citations: [{ title: reportCtx.title, category: reportCtx.type }],
+    content: `已基于「${opsCtx.title}」分析您的问题。\n\n上下文摘要：${opsCtx.summary}\n\n建议优先确认影响范围，再进行人工处置标记。`,
+    citations: [{ title: opsCtx.id, category: opsCtx.source }],
   };
 }

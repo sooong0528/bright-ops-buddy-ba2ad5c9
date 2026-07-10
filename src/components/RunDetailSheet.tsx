@@ -5,9 +5,25 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
 import { Clock, User as UserIcon, Calendar, ListChecks, AlertTriangle, AlertCircle, CheckCircle2 } from "lucide-react";
-import { hosts, alerts, type InspectionRun, type InspectionTask } from "@/lib/mockData";
+import {
+  alerts,
+  detectableMetrics,
+  hosts,
+  inspectionMetricResults,
+  opsAssets,
+  type InspectionRun,
+  type InspectionTask,
+} from "@/lib/mockData";
 
 interface Props {
   run: InspectionRun | null;
@@ -22,6 +38,9 @@ export function RunDetailSheet({ run, task, onClose }: Props) {
         task.targets.includes("全部主机组") || task.targets.includes(h.group) || task.targets.includes(h.name)
       )
     : [];
+  const metricResults = run ? inspectionMetricResults.filter((item) => item.runId === run.id) : [];
+  const missingCount = metricResults.filter((item) => item.status === "缺项").length;
+  const logResults = metricResults.filter((item) => item.logEvidence);
 
   return (
     <Sheet open={!!run} onOpenChange={(v) => !v && onClose()}>
@@ -56,12 +75,85 @@ export function RunDetailSheet({ run, task, onClose }: Props) {
               <ResultStat icon={AlertCircle} label="关注" value={run.attention} tone="warning" />
               <ResultStat icon={AlertTriangle} label="异常" value={run.abnormal} tone="destructive" />
             </div>
+            {missingCount > 0 && (
+              <div className="mt-3 rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm">
+                本次巡检存在 {missingCount} 项缺项，已单独记录，不计入正常项。
+              </div>
+            )}
 
             {/* 摘要 */}
             <div className="mt-5 rounded-lg border bg-card p-4">
               <div className="text-xs font-semibold text-muted-foreground mb-2">巡检摘要</div>
               <p className="text-sm leading-relaxed">{run.summary}</p>
             </div>
+
+            <div className="mt-5">
+              <div className="flex items-center gap-2 mb-3">
+                <ListChecks className="h-4 w-4 text-muted-foreground" />
+                <h4 className="font-semibold text-sm">指标判定明细</h4>
+                <span className="text-xs text-muted-foreground">{metricResults.length} 项</span>
+              </div>
+              <div className="rounded-lg border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>资产对象</TableHead>
+                      <TableHead>指标</TableHead>
+                      <TableHead>当前值</TableHead>
+                      <TableHead>阈值/窗口</TableHead>
+                      <TableHead>数据来源</TableHead>
+                      <TableHead>状态</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {metricResults.map((result) => {
+                      const asset = opsAssets.find((item) => item.id === result.assetId);
+                      const metric = detectableMetrics.find((item) => item.id === result.metricId);
+                      return (
+                        <TableRow key={result.id}>
+                          <TableCell>
+                            <div className="text-sm font-medium">{asset?.name ?? result.assetId}</div>
+                            <div className="text-xs text-muted-foreground">{asset?.type ?? "—"} · {asset?.address ?? asset?.systemName}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">{metric?.name ?? result.metricId}</div>
+                            <div className="text-xs text-muted-foreground">{metric?.unit ?? ""}</div>
+                          </TableCell>
+                          <TableCell className="tabular-nums">{result.currentValue}</TableCell>
+                          <TableCell className="text-xs">
+                            关注 {result.attentionThreshold} / 异常 {result.abnormalThreshold}
+                            <div className="text-muted-foreground mt-0.5">{result.judgeWindow}</div>
+                          </TableCell>
+                          <TableCell>
+                            <StatusBadge tone="info">{result.dataSource}</StatusBadge>
+                            <div className="text-xs text-muted-foreground font-mono mt-1 break-all">{result.sourceIdentifier}</div>
+                          </TableCell>
+                          <TableCell><StatusBadge tone={statusTone(result.status)}>{result.status}</StatusBadge></TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            {logResults.length > 0 && (
+              <div className="mt-5 rounded-lg border bg-card p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-warning" />
+                  <h4 className="font-semibold text-sm">日志源检测结果</h4>
+                </div>
+                {logResults.map((result) => (
+                  <div key={result.id} className="rounded-md bg-secondary/50 p-3 text-xs">
+                    <div className="font-medium">{result.logEvidence?.path}</div>
+                    <div className="mt-1 text-muted-foreground">
+                      关键字：{result.logEvidence?.keywords.join("、")} · 命中 {result.logEvidence?.hitCount} 条 · {result.logEvidence?.timeWindow}
+                    </div>
+                    <p className="mt-2 text-foreground/80">{result.evidenceSnapshot}</p>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* 主机明细 */}
             <div className="mt-5">

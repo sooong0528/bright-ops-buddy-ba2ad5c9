@@ -7,19 +7,23 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const titleMap: Record<string, { title: string; sub: string }> = {
-  "/": { title: "总览驾驶舱", sub: "平台运行态势与关键指标一览" },
+  "/": { title: "运维总览", sub: "平台运行态势与关键指标一览" },
   "/inspection": { title: "巡检中心", sub: "巡检任务调度、结果分析与关注项识别" },
-  "/inspection-admin": { title: "巡检管理", sub: "巡检任务配置与判定规则管理" },
-  "/assistant": { title: "智能问答", sub: "知识增强问答 · 引用手册、SOP、案例" },
-  "/reports": { title: "报告中心", sub: "巡检日报 / 周报 / 异常摘要 / 问答记录" },
-  "/knowledge": { title: "知识库管理", sub: "运维手册、SOP、故障案例与 FAQ 维护" },
-  "/users": { title: "用户与权限", sub: "账号、角色与访问权限管理" },
-  "/audit": { title: "审计留痕", sub: "任务、问答、报告与操作的全过程留痕" },
+  "/inspection-admin": { title: "巡检配置", sub: "配置巡检对象、指标规则和执行周期" },
+  "/fault-analysis": { title: "故障分析", sub: "巡检异常与关注项的辅助研判、处理记录和审计追溯" },
+  "/assistant": { title: "智能问答", sub: "知识问答、数据查询和上下文追问" },
+  "/reports": { title: "报告中心", sub: "查看巡检、故障分析和知识服务报告" },
+  "/assets": { title: "资产管理", sub: "维护试点资产、监控对象映射和责任人" },
+  "/knowledge": { title: "知识库", sub: "运维手册、SOP、故障案例与 FAQ 维护" },
+  "/users": { title: "用户与角色", sub: "管理用户账号和角色边界" },
+  "/audit": { title: "审计留痕", sub: "记录任务、问答、报告和用户操作" },
 };
 
 export default function AppLayout() {
   const { pathname } = useLocation();
-  const meta = titleMap[pathname] ?? { title: "智能运维平台", sub: "" };
+  const meta = pathname.startsWith("/fault-analysis/")
+    ? { title: "故障分析详情", sub: "证据依据、处置建议、人工处理结果和 Trace 审计" }
+    : titleMap[pathname] ?? { title: "智能运维平台", sub: "" };
 
   return (
     <SidebarProvider>
@@ -40,7 +44,7 @@ export default function AppLayout() {
             <div className="ml-auto flex items-center gap-2">
               <div className="relative hidden md:block">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="搜索主机 / 知识 / 报告" className="w-64 pl-8 h-9 bg-secondary/60 border-transparent focus-visible:bg-card focus-visible:border-border" />
+                <Input placeholder="搜索资产 / 知识 / 报告" className="w-64 pl-8 h-9 bg-secondary/60 border-transparent focus-visible:bg-card focus-visible:border-border" />
               </div>
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-4 w-4" />
@@ -55,7 +59,7 @@ export default function AppLayout() {
                 </Avatar>
                 <div className="hidden md:flex flex-col leading-tight">
                   <span className="text-xs font-semibold">李管理</span>
-                  <span className="text-xs text-muted-foreground">管理员</span>
+                  <span className="text-xs text-muted-foreground">系统管理员</span>
                 </div>
               </div>
             </div>

@@ -8,6 +8,9 @@ import {
   ScrollText,
   Activity,
   Settings2,
+  ShieldAlert,
+  Server,
+  SlidersHorizontal,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -23,16 +26,19 @@ import {
 } from "@/components/ui/sidebar";
 
 const mainItems = [
-  { title: "总览驾驶舱", url: "/", icon: LayoutDashboard },
+  { title: "运维总览", url: "/", icon: LayoutDashboard },
   { title: "巡检中心", url: "/inspection", icon: ClipboardCheck },
+  { title: "故障分析", url: "/fault-analysis", icon: ShieldAlert },
   { title: "智能问答", url: "/assistant", icon: Bot },
   { title: "报告中心", url: "/reports", icon: FileText },
 ];
 
 const manageItems = [
-  { title: "巡检管理", url: "/inspection-admin", icon: Settings2 },
-  { title: "知识库管理", url: "/knowledge", icon: BookOpen },
-  { title: "用户与权限", url: "/users", icon: Users },
+  { title: "资产管理", url: "/assets", icon: Server },
+  { title: "观测配置", url: "/observation-config", icon: SlidersHorizontal },
+  { title: "巡检配置", url: "/inspection-admin", icon: Settings2 },
+  { title: "知识库", url: "/knowledge", icon: BookOpen },
+  { title: "用户与角色", url: "/users", icon: Users },
   { title: "审计留痕", url: "/audit", icon: ScrollText },
 ];
 
