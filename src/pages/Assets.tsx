@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Server, Database, Layers, Package, Search, Plus, Settings2, Activity, FileText, Pencil, Trash2, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, ChevronDown } from "lucide-react";
+import { Server, Database, Layers, Package, Search, Plus, Settings2, Activity, FileText, Pencil, Trash2, RefreshCw, CheckCircle2, AlertCircle, Check, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 const typeMeta: Record<AssetType, { icon: any; color: string; bg: string }> = {
   主机: { icon: Server, color: "text-primary", bg: "bg-primary-soft" },
@@ -576,6 +578,74 @@ function OwnerMultiSelect({ value, onChange }: { value: string[]; onChange: (own
   );
 }
 
+function ItemPicker({
+  value,
+  items,
+  label,
+  onChange,
+}: {
+  value?: string;
+  items: string[];
+  label: string;
+  onChange: (item?: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-label={label}
+          aria-expanded={open}
+          className="h-8 w-full justify-between px-2 font-mono text-xs font-normal"
+        >
+          <span className={value ? "truncate" : "truncate text-muted-foreground"}>
+            {value ?? "选择 Zabbix Item"}
+          </span>
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[420px] p-0">
+        <Command>
+          <CommandInput placeholder="搜索 Zabbix Item" className="h-9" />
+          <CommandList>
+            <CommandEmpty>未找到匹配的 Item</CommandEmpty>
+            <CommandGroup>
+              {value && (
+                <CommandItem
+                  value="清除当前绑定"
+                  onSelect={() => {
+                    onChange(undefined);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="text-muted-foreground">清除当前绑定</span>
+                </CommandItem>
+              )}
+              {items.map((item) => (
+                <CommandItem
+                  key={item}
+                  value={item}
+                  onSelect={() => {
+                    onChange(item);
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={`mr-2 h-4 w-4 ${item === value ? "opacity-100" : "opacity-0"}`} />
+                  <span className="font-mono text-xs">{item}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /* ============ 观测配置编辑器（左 Host 列表；右 推荐巡检项映射 + 资产级日志源） ============ */
 function ObservationEditor({
   asset, value, onCancel, onSave,
@@ -594,7 +664,6 @@ function ObservationEditor({
   );
   const [activeHost, setActiveHost] = useState<string | null>(() => Object.keys(value.hostMappings ?? {})[0] ?? null);
   const [hostKeyword, setHostKeyword] = useState("");
-  const [showAllItems, setShowAllItems] = useState(false);
   const [editingMetric, setEditingMetric] = useState<string | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
   const [customMetric, setCustomMetric] = useState({ name: "", item: "" });
@@ -644,7 +713,10 @@ function ObservationEditor({
   };
 
   const addCustomMetric = () => {
-    if (!activeHost || !customMetric.name.trim()) return;
+    if (!activeHost || !customMetric.name.trim() || !customMetric.item.trim()) {
+      toast({ title: "请填写完整", description: "巡检项名称和 Zabbix Item 均为必填", variant: "destructive" });
+      return;
+    }
     const item = customMetric.item.trim();
     if (item && (hostMappings[activeHost] ?? []).some((mapping) => mapping.matchedItem === item)) {
       toast({ title: "无法重复绑定", description: "该 Item 已关联其他巡检项", variant: "destructive" });
@@ -674,6 +746,9 @@ function ObservationEditor({
 
   const activeMappings = activeHost ? hostMappings[activeHost] ?? [] : [];
   const matchedMetrics = activeMappings.filter((m) => m.matchedItem).length;
+  const customSelectableItems = zabbixItemKeys.filter(
+    (item) => !activeMappings.some((mapping) => mapping.matchedItem === item),
+  );
 
   const primaryHost = selectedHosts[0] ?? null;
   const primaryHostMeta = primaryHost ? zabbixHostPool.find((h) => h.name === primaryHost) : null;
@@ -788,23 +863,15 @@ function ObservationEditor({
                           </TableCell>
                           <TableCell className="align-top py-2">
                             {isEditing ? (
-                              <Select
-                                value={m.matchedItem ?? "__none__"}
-                                onValueChange={(value) => {
-                                  updateMapping(primaryHost, m.metric, value === "__none__" ? undefined : value);
+                              <ItemPicker
+                                value={m.matchedItem}
+                                items={selectableItems}
+                                label={`选择 Zabbix Item - ${m.metric}`}
+                                onChange={(item) => {
+                                  updateMapping(primaryHost, m.metric, item);
                                   setEditingMetric(null);
                                 }}
-                              >
-                                <SelectTrigger aria-label={`选择 Zabbix Item - ${m.metric}`} className="h-8 text-xs font-mono">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__" className="text-xs">清除绑定</SelectItem>
-                                  {selectableItems.map((item) => (
-                                    <SelectItem key={item} value={item} className="text-xs font-mono">{item}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              />
                             ) : matched ? (
                               <Badge variant="secondary" className="text-[11px] font-mono font-normal">
                                 {m.matchedItem}
@@ -837,18 +904,11 @@ function ObservationEditor({
                   </TableBody>
                 </Table>
 
-                <div className="flex items-center justify-between border-t px-3 py-2 bg-muted/10 text-[11px]">
-                  <div className="flex gap-3">
-                    <button type="button" className="text-primary hover:underline flex items-center gap-1"
-                      onClick={() => setShowAllItems((v) => !v)}>
-                      <ExternalLink className="h-3 w-3" />
-                      {showAllItems ? "收起全部 Item" : `查看全部 Zabbix Item (${primaryHostMeta?.itemCount ?? 0})`}
-                    </button>
-                    <button type="button" className="text-primary hover:underline flex items-center gap-1"
-                      onClick={() => setCustomOpen((v) => !v)}>
-                      <Plus className="h-3 w-3" />添加自定义巡检项
-                    </button>
-                  </div>
+                <div className="flex items-center border-t px-3 py-2 bg-muted/10 text-[11px]">
+                  <button type="button" className="text-primary hover:underline flex items-center gap-1"
+                    onClick={() => setCustomOpen((v) => !v)}>
+                    <Plus className="h-3 w-3" />添加自定义巡检项
+                  </button>
                 </div>
 
                 {customOpen && (
@@ -860,10 +920,15 @@ function ObservationEditor({
                         placeholder="如：GC 停顿时长" className="h-7 text-xs mt-1" />
                     </div>
                     <div className="flex-1">
-                      <Label className="text-[11px] text-muted-foreground">Zabbix Item key</Label>
-                      <Input value={customMetric.item}
-                        onChange={(e) => setCustomMetric((v) => ({ ...v, item: e.target.value }))}
-                        placeholder="jmx[..., FullGCTime]" className="h-7 text-xs mt-1 font-mono" />
+                      <Label className="text-[11px] text-muted-foreground">Zabbix Item</Label>
+                      <div className="mt-1">
+                        <ItemPicker
+                          value={customMetric.item || undefined}
+                          items={customSelectableItems}
+                          label="选择 Zabbix Item - 自定义巡检项"
+                          onChange={(item) => setCustomMetric((v) => ({ ...v, item: item ?? "" }))}
+                        />
+                      </div>
                     </div>
                     <Button size="sm" className="h-7 text-xs" onClick={addCustomMetric}>添加</Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs"
@@ -871,16 +936,6 @@ function ObservationEditor({
                   </div>
                 )}
 
-                {showAllItems && (
-                  <div className="border-t px-3 py-2 bg-muted/10 text-[11px] text-muted-foreground">
-                    <div className="mb-1 font-medium text-foreground">全部 Item（预览）</div>
-                    <div className="grid grid-cols-3 gap-x-3 gap-y-1 max-h-40 overflow-y-auto font-mono">
-                      {zabbixItemKeys.map((k) => (
-                        <span key={k}>{k}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             ) : (
               <EmptyHint text="尚未关联 Zabbix Host，请在上方选择" />

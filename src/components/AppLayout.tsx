@@ -1,10 +1,12 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { Bell, Search, HelpCircle } from "lucide-react";
+import { Bell, Search, HelpCircle, ChevronDown, LogOut } from "lucide-react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import type { UserItem } from "@/lib/mockData";
 
 const titleMap: Record<string, { title: string; sub: string }> = {
   "/": { title: "总览驾驶舱", sub: "平台运行态势与关键指标一览" },
@@ -20,7 +22,7 @@ const titleMap: Record<string, { title: string; sub: string }> = {
   "/audit": { title: "审计留痕", sub: "任务、问答、报告、Agent 与数据来源全过程留痕" },
 };
 
-export default function AppLayout() {
+export default function AppLayout({ currentUser, onLogout }: { currentUser: UserItem; onLogout: () => void }) {
   const { pathname } = useLocation();
   const meta = titleMap[pathname] ?? { title: "智能运维平台", sub: "" };
 
@@ -52,15 +54,32 @@ export default function AppLayout() {
               <Button variant="ghost" size="icon">
                 <HelpCircle className="h-4 w-4" />
               </Button>
-              <div className="ml-1 flex items-center gap-2 pl-3 border-l">
-                <Avatar className="h-8 w-8 ring-2 ring-primary/10">
-                  <AvatarFallback className="bg-gradient-primary text-primary-foreground text-xs font-semibold">李</AvatarFallback>
-                </Avatar>
-                <div className="hidden md:flex flex-col leading-tight">
-                  <span className="text-xs font-semibold">李管理</span>
-                  <span className="text-xs text-muted-foreground">管理员</span>
-                </div>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="ml-1 h-10 gap-2 border-l pl-3 pr-2" aria-label="当前登录用户">
+                    <Avatar className="h-8 w-8 ring-2 ring-primary/10">
+                      <AvatarFallback className="bg-gradient-primary text-primary-foreground text-xs font-semibold">
+                        {currentUser.name.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="hidden md:flex flex-col items-start leading-tight">
+                      <span className="text-xs font-semibold">{currentUser.name}</span>
+                      <span className="text-xs text-muted-foreground">{currentUser.role}</span>
+                    </div>
+                    <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground md:block" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <div className="text-sm font-medium">{currentUser.name}</div>
+                    <div className="font-mono text-xs font-normal text-muted-foreground">{currentUser.account}</div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={onLogout} className="text-destructive focus:text-destructive">
+                    <LogOut className="mr-2 h-4 w-4" />退出登录
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </header>
           <main className="flex-1 p-4 md:p-6 animate-fade-in">

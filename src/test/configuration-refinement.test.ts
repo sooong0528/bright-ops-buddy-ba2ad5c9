@@ -3,6 +3,7 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { assets, defaultCheckItemsByAssetType, users } from "@/lib/mockData";
 import Assets from "@/pages/Assets";
+import App from "@/App";
 
 describe("configuration refinement", () => {
   it("keeps judgment windows outside inspection schemes", () => {
@@ -36,5 +37,23 @@ describe("configuration refinement", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "更换" })[0]);
 
     expect(screen.queryByPlaceholderText("填写 Zabbix Item key，逗号分隔")).not.toBeInTheDocument();
+  });
+
+  it("sends unauthenticated users to the login page", () => {
+    localStorage.clear();
+
+    render(React.createElement(App));
+
+    expect(screen.getByRole("button", { name: "登录" })).toBeInTheDocument();
+  });
+
+  it("uses searchable item pickers without the all-items preview", () => {
+    render(React.createElement(Assets));
+
+    fireEvent.click(screen.getAllByRole("button", { name: /观测配置/ })[0]);
+    expect(screen.queryByRole("button", { name: /查看全部 Zabbix Item/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "更换" })[0]);
+
+    expect(screen.getByRole("combobox", { name: /选择 Zabbix Item/ })).toBeInTheDocument();
   });
 });
