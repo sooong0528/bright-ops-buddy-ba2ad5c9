@@ -193,7 +193,6 @@ export default function AbnormalRecords() {
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground tabular-nums">
                     {r.lastSeen}
-                    <div className="text-sm text-muted-foreground/70">最近一次巡检命中</div>
                   </TableCell>
                   <TableCell className="text-xs tabular-nums">
                     {r.duration}
