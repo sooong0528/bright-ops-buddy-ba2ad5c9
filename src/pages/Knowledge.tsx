@@ -30,6 +30,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
 import { knowledge as knowledgeSeed } from "@/lib/mockData";
 import { toast } from "@/hooks/use-toast";
+import { StatCard, StatCardGrid } from "@/components/StatCard";
 
 type ParseStatus = "已完成" | "解析中" | "解析失败";
 
@@ -106,7 +107,8 @@ export default function Knowledge() {
   const stats = useMemo(() => {
     const enabled = docs.filter((d) => d.enabled).length;
     const failed = docs.filter((d) => d.parseStatus === "解析失败").length;
-    return { total: docs.length, enabled, disabled: docs.length - enabled, failed };
+    const cited = docs.reduce((sum, doc) => sum + doc.citedCount, 0);
+    return { total: docs.length, enabled, failed, cited };
   }, [docs]);
 
   const toggleEnabled = (id: string) => {
@@ -185,12 +187,12 @@ export default function Knowledge() {
   return (
     <div className="space-y-5">
       {/* 顶部统计 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatTile label="文档总数" value={String(stats.total)} sub="上传即入库" tone="primary" />
-        <StatTile label="启用中" value={String(stats.enabled)} sub="参与问答与故障分析" tone="success" />
-        <StatTile label="已停用" value={String(stats.disabled)} sub="保留但不参与检索" tone="info" />
-        <StatTile label="解析失败" value={String(stats.failed)} sub="可点击「重新解析」重试" tone="warning" />
-      </div>
+      <StatCardGrid>
+        <StatCard title="文档总数" value={stats.total} icon={BookOpen} tone="primary" description="当前知识文档" />
+        <StatCard title="启用中" value={stats.enabled} icon={CheckCircle2} tone="success" description="参与问答与故障分析" />
+        <StatCard title="解析失败" value={stats.failed} icon={AlertCircle} tone="destructive" description="需要重新解析" />
+        <StatCard title="累计引用" value={stats.cited} icon={Eye} tone="info" description="知识内容被引用次数" />
+      </StatCardGrid>
 
       {/* 说明文案 */}
       <div className="panel px-4 py-3 text-sm text-muted-foreground leading-relaxed">
@@ -378,22 +380,6 @@ function ParseBadge({ status }: { status: ParseStatus }) {
   if (status === "已完成") return <StatusBadge tone="success"><CheckCircle2 className="h-3 w-3" />已解析</StatusBadge>;
   if (status === "解析中") return <StatusBadge tone="info"><RefreshCw className="h-3 w-3 animate-spin" />解析中</StatusBadge>;
   return <StatusBadge tone="destructive"><AlertCircle className="h-3 w-3" />解析失败</StatusBadge>;
-}
-
-function StatTile({ label, value, sub, tone }: { label: string; value: string; sub: string; tone: "primary" | "info" | "warning" | "success" }) {
-  const map: Record<string, string> = {
-    primary: "from-primary/10 to-primary/5 text-primary",
-    info: "from-info/10 to-info/5 text-info",
-    warning: "from-warning/15 to-warning/5 text-warning",
-    success: "from-success/10 to-success/5 text-success",
-  };
-  return (
-    <div className={`stat-card bg-gradient-to-br ${map[tone]}`}>
-      <p className="text-xs text-muted-foreground font-medium">{label}</p>
-      <p className="text-3xl font-semibold tabular-nums mt-1">{value}</p>
-      <p className="text-xs text-muted-foreground mt-1">{sub}</p>
-    </div>
-  );
 }
 
 /* ============ 上传对话框 ============ */

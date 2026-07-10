@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Download, ScrollText, Filter, ShieldCheck } from "lucide-react";
+import { Search, Download, ScrollText, Filter, ShieldCheck, UserRound, ListChecks, Bot, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
 import { auditLogs } from "@/lib/mockData";
+import { StatCard, StatCardGrid } from "@/components/StatCard";
 
 const CATEGORIES = ["全部", "用户操作", "任务执行", "Agent 调用", "数据来源"] as const;
 type Cat = typeof CATEGORIES[number];
@@ -39,12 +40,12 @@ export default function Audit() {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Tile label="用户操作" value={String(counts["用户操作"])} />
-        <Tile label="任务执行" value={String(counts["任务执行"])} />
-        <Tile label="Agent 调用" value={String(counts["Agent 调用"])} />
-        <Tile label="失败操作" value={String(auditLogs.filter((l) => l.result === "失败").length)} tone="destructive" />
-      </div>
+      <StatCardGrid>
+        <StatCard title="用户操作" value={counts["用户操作"]} icon={UserRound} tone="primary" description="登录与业务操作记录" />
+        <StatCard title="任务执行" value={counts["任务执行"]} icon={ListChecks} tone="success" description="巡检与系统任务" />
+        <StatCard title="Agent 调用" value={counts["Agent 调用"]} icon={Bot} tone="info" description="智能分析调用记录" />
+        <StatCard title="失败操作" value={auditLogs.filter((log) => log.result === "失败").length} icon={XCircle} tone="destructive" description="需要关注的失败记录" />
+      </StatCardGrid>
 
       <div className="panel">
         <div className="flex flex-wrap items-center justify-between gap-3 p-5 pb-3">
@@ -115,15 +116,6 @@ export default function Audit() {
           <p className="text-xs text-muted-foreground tabular-nums">共 {list.length} 条</p>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Tile({ label, value, tone }: { label: string; value: string; tone?: "destructive" }) {
-  return (
-    <div className="stat-card">
-      <p className="text-xs text-muted-foreground font-medium">{label}</p>
-      <p className={`text-3xl font-semibold tabular-nums mt-1 ${tone === "destructive" ? "text-destructive" : ""}`}>{value}</p>
     </div>
   );
 }

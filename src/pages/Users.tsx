@@ -1,4 +1,4 @@
-import { Plus, ShieldCheck, Eye, UserCog, MoreHorizontal } from "lucide-react";
+import { Plus, ShieldCheck, Eye, UserCog, MoreHorizontal, Users as UsersIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -12,38 +12,17 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
 import { users } from "@/lib/mockData";
-
-const roles = [
-  { name: "管理员", count: 1, desc: "拥有全部模块的操作权限，可管理知识库、用户、配置", color: "destructive" as const, icon: ShieldCheck },
-  { name: "运维用户", count: 2, desc: "可执行巡检、生成报告、维护知识库", color: "primary" as const, icon: UserCog },
-  { name: "查看用户", count: 2, desc: "仅可查看巡检结果、报告与知识库", color: "info" as const, icon: Eye },
-];
+import { StatCard, StatCardGrid } from "@/components/StatCard";
 
 export default function UsersPage() {
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {roles.map((r) => (
-          <div key={r.name} className="panel p-5">
-            <div className="flex items-start gap-3">
-              <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-                r.color === "destructive" ? "bg-destructive-soft text-destructive" :
-                r.color === "primary" ? "bg-primary-soft text-primary" :
-                "bg-info-soft text-info"
-              }`}>
-                <r.icon className="h-5 w-5" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-semibold text-sm">{r.name}</h4>
-                  <span className="text-xs tabular-nums text-muted-foreground">{r.count} 人</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{r.desc}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      <StatCardGrid>
+        <StatCard title="用户总数" value={users.length} unit="人" icon={UsersIcon} tone="primary" description={`启用 ${users.filter((user) => user.status === "启用").length} · 停用 ${users.filter((user) => user.status === "停用").length}`} />
+        <StatCard title="系统管理员" value={users.filter((user) => user.role === "系统管理员").length} unit="人" icon={ShieldCheck} tone="destructive" description="拥有全部系统权限" />
+        <StatCard title="运维人员" value={users.filter((user) => user.role === "运维人员").length} unit="人" icon={UserCog} tone="success" description="执行巡检与故障分析" />
+        <StatCard title="查看用户" value={users.filter((user) => user.role === "查看用户").length} unit="人" icon={Eye} tone="info" description="只读查看业务结果" />
+      </StatCardGrid>
 
       <div className="panel">
         <div className="flex items-center justify-between p-5 pb-3">

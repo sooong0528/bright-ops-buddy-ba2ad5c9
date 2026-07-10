@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { StatCard, StatCardGrid } from "@/components/StatCard";
 
 const typeMeta: Record<AssetType, { icon: any; color: string; bg: string }> = {
   主机: { icon: Server, color: "text-primary", bg: "bg-primary-soft" },
@@ -224,12 +225,15 @@ export default function Assets() {
   const selected = openId ? assets.find((a) => a.id === openId) ?? null : null;
   const obsEditAsset = obsEditId ? assets.find((a) => a.id === obsEditId) ?? null : null;
 
-  const counts = useMemo(() => ({
-    主机: assets.filter((a) => a.type === "主机").length,
-    数据库: assets.filter((a) => a.type === "数据库").length,
-    应用服务: assets.filter((a) => a.type === "应用服务").length,
-    中间件: assets.filter((a) => a.type === "中间件").length,
-  }), [assets]);
+  const observationStats = useMemo(() => {
+    const statuses = assets.map((asset) => statusOf(configs[asset.id]));
+    return {
+      total: assets.length,
+      configured: statuses.filter((status) => status === "已配置").length,
+      partial: statuses.filter((status) => status === "部分配置").length,
+      unconfigured: statuses.filter((status) => status === "未配置").length,
+    };
+  }, [assets, configs]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -277,23 +281,12 @@ export default function Assets() {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {(Object.keys(counts) as AssetType[]).map((t) => {
-          const meta = typeMeta[t];
-          const Icon = meta.icon;
-          return (
-            <div key={t} className="panel p-4 flex items-center gap-3">
-              <div className={`h-11 w-11 rounded-lg ${meta.bg} flex items-center justify-center`}>
-                <Icon className={`h-5 w-5 ${meta.color}`} />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">{t}</p>
-                <p className="text-2xl font-bold tabular-nums leading-tight">{counts[t]}</p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <StatCardGrid>
+        <StatCard title="资产总数" value={observationStats.total} icon={Server} tone="primary" description="当前纳管资产" />
+        <StatCard title="观测已配置" value={observationStats.configured} icon={CheckCircle2} tone="success" description="指标与日志均已配置" />
+        <StatCard title="部分配置" value={observationStats.partial} icon={AlertCircle} tone="warning" description="仍有观测配置缺项" />
+        <StatCard title="未配置" value={observationStats.unconfigured} icon={Settings2} tone="destructive" description="尚未完成观测接入" />
+      </StatCardGrid>
 
       <div className="filter-bar">
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>

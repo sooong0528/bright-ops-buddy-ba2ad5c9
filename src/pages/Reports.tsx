@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { StatCard, StatCardGrid } from "@/components/StatCard";
 
 const categoryMeta: Record<ReportCategory, { icon: any; color: string; bg: string; desc: string }> = {
   巡检报告: {
@@ -137,12 +138,12 @@ export default function Reports() {
   return (
     <div className="space-y-5">
       {/* 顶部统计概览 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <SummaryCard label={showArchived ? "已归档报告" : "本月报告总数"} value={showArchived ? stats.archivedCount : stats.total} icon={FileText} tone="primary" />
-        <SummaryCard label="巡检报告" value={stats.quality} icon={ShieldCheck} tone="success" hint="日报 / 周报" />
-        <SummaryCard label="故障分析报告" value={stats.risk} icon={AlertTriangle} tone="warning" hint="异常/关注触发" />
-        <SummaryCard label="知识服务情况分析报告" value={stats.knowledge} icon={BookOpen} tone="info" hint="月报" />
-      </div>
+      <StatCardGrid>
+        <StatCard title={showArchived ? "已归档报告" : "本月报告总数"} value={showArchived ? stats.archivedCount : stats.total} icon={FileText} tone="primary" description="当前统计周期" />
+        <StatCard title="巡检报告" value={stats.quality} icon={ShieldCheck} tone="success" description="日报 / 周报" />
+        <StatCard title="故障分析报告" value={stats.risk} icon={AlertTriangle} tone="warning" description="由异常记录触发" />
+        <StatCard title="知识服务报告" value={stats.knowledge} icon={BookOpen} tone="info" description="知识服务月报" />
+      </StatCardGrid>
 
       {/* 工具条 */}
       <div className="filter-bar">
@@ -652,28 +653,6 @@ function KpiTile({ label, value, hint, tone }: { label: string; value: string; h
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`text-2xl font-bold mt-1 tabular-nums ${toneCls[tone]}`}>{value}</p>
       {hint && <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>}
-    </div>
-  );
-}
-
-function SummaryCard({ label, value, icon: Icon, tone, hint }: { label: string; value: number; icon: any; tone: "primary" | "success" | "warning" | "info"; hint?: string }) {
-  const map: Record<string, { bg: string; text: string }> = {
-    primary: { bg: "bg-primary-soft", text: "text-primary" },
-    success: { bg: "bg-success/10", text: "text-success" },
-    warning: { bg: "bg-warning/10", text: "text-warning" },
-    info: { bg: "bg-info/10", text: "text-info" },
-  };
-  const c = map[tone];
-  return (
-    <div className="panel p-4 flex items-center gap-3">
-      <div className={`h-11 w-11 rounded-lg ${c.bg} flex items-center justify-center shrink-0`}>
-        <Icon className={`h-5 w-5 ${c.text}`} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs text-muted-foreground truncate">{label}</p>
-        <p className="text-2xl font-bold tabular-nums leading-tight">{value}</p>
-        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-      </div>
     </div>
   );
 }

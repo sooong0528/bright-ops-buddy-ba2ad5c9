@@ -17,6 +17,7 @@ import { analysisTasks, abnormalRecords, type AnalysisTask, type AnalysisTaskSta
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "@/hooks/use-toast";
+import { StatCard, StatCardGrid } from "@/components/StatCard";
 
 function statusTone(s: AnalysisTaskStatus) {
   switch (s) {
@@ -54,12 +55,12 @@ export default function Analysis() {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <SummaryCard label="分析任务总数" value={stats.total} icon={Wrench} tone="primary" />
-        <SummaryCard label="分析中" value={stats.analyzing} icon={Loader2} tone="info" />
-        <SummaryCard label="已分析" value={stats.done} icon={CheckCircle2} tone="success" />
-        <SummaryCard label="分析失败" value={stats.failed} icon={XCircle} tone="destructive" />
-      </div>
+      <StatCardGrid>
+        <StatCard title="分析任务总数" value={stats.total} icon={Wrench} tone="primary" description="全部故障分析任务" />
+        <StatCard title="分析中" value={stats.analyzing} icon={Loader2} tone="info" description="正在汇总证据与建议" />
+        <StatCard title="已分析" value={stats.done} icon={CheckCircle2} tone="success" description="已形成分析结果" />
+        <StatCard title="分析失败" value={stats.failed} icon={XCircle} tone="destructive" description="需要重新发起分析" />
+      </StatCardGrid>
 
       <div className="filter-bar">
         <div className="flex items-center gap-2">
@@ -331,27 +332,5 @@ function Section({ title, children }: { title: React.ReactNode; children: React.
       <h3 className="text-sm font-semibold mb-2 text-foreground/90">{title}</h3>
       {children}
     </section>
-  );
-}
-
-function SummaryCard({ label, value, icon: Icon, tone }: { label: string; value: number; icon: any; tone: "primary" | "success" | "warning" | "info" | "destructive" }) {
-  const map: Record<string, { bg: string; text: string }> = {
-    primary: { bg: "bg-primary-soft", text: "text-primary" },
-    success: { bg: "bg-success/10", text: "text-success" },
-    warning: { bg: "bg-warning/10", text: "text-warning" },
-    info: { bg: "bg-info/10", text: "text-info" },
-    destructive: { bg: "bg-destructive-soft", text: "text-destructive" },
-  };
-  const c = map[tone];
-  return (
-    <div className="panel p-4 flex items-center gap-3">
-      <div className={`h-11 w-11 rounded-lg ${c.bg} flex items-center justify-center shrink-0`}>
-        <Icon className={`h-5 w-5 ${c.text}`} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs text-muted-foreground truncate">{label}</p>
-        <p className="text-2xl font-bold tabular-nums leading-tight">{value}</p>
-      </div>
-    </div>
   );
 }

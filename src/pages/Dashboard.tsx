@@ -1,16 +1,13 @@
 import {
-  Cpu,
-  HardDrive,
-  MemoryStick,
-  Wifi,
   TrendingUp,
   AlertTriangle,
   CheckCircle2,
-  Activity,
   ArrowUpRight,
   Server,
-  ClipboardCheck,
   FileText,
+  Bot,
+  Sparkles,
+  ArrowRight,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -20,44 +17,25 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  AreaChart,
-  Area,
-  PieChart,
-  Pie,
-  Cell,
   Legend,
-  BarChart,
-  Bar,
 } from "recharts";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
 import {
-  hosts,
-  alerts,
-  cpuTrend,
-  memoryTrend,
-  inspectionDistribution,
-  weeklyAlertTrend,
+  weeklyInspectionTrend,
   reports,
   abnormalRecords,
   agentRuns,
 } from "@/lib/mockData";
-import { Bot, Sparkles, ArrowRight } from "lucide-react";
+import { StatCard, StatCardGrid } from "@/components/StatCard";
 
 const stats = [
   { label: "纳管资产", value: "18", unit: "个", delta: "+2", icon: Server, tone: "info" as const },
   { label: "正常率", value: "75", unit: "%", delta: "-12.5%", icon: CheckCircle2, tone: "success" as const },
-  { label: "异常/关注记录", value: "5", unit: "项", delta: "+2", icon: TrendingUp, tone: "warning" as const },
+  { label: "异常记录", value: "5", unit: "项", delta: "+2", icon: TrendingUp, tone: "warning" as const },
   { label: "今日 Agent 调用", value: "126", unit: "次", delta: "+18", icon: Bot, tone: "info" as const },
 ];
-
-const toneClass: Record<string, string> = {
-  info: "text-info bg-info-soft",
-  success: "text-success bg-success-soft",
-  warning: "text-warning bg-warning-soft",
-  destructive: "text-destructive bg-destructive-soft",
-};
 
 export default function Dashboard() {
   return (
@@ -91,33 +69,27 @@ export default function Dashboard() {
       </div>
 
       {/* 关键指标 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <StatCardGrid>
         {stats.map((s) => (
-          <div key={s.label} className="stat-card">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">{s.label}</p>
-                <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-3xl font-semibold tabular-nums">{s.value}</span>
-                  <span className="text-sm text-muted-foreground">{s.unit}</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">较昨日 <span className="text-foreground font-medium">{s.delta}</span></p>
-              </div>
-              <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${toneClass[s.tone]}`}>
-                <s.icon className="h-5 w-5" />
-              </div>
-            </div>
-          </div>
+          <StatCard
+            key={s.label}
+            title={s.label}
+            value={s.value}
+            unit={s.unit}
+            description={`较昨日 ${s.delta}`}
+            icon={s.icon}
+            tone={s.tone}
+          />
         ))}
-      </div>
+      </StatCardGrid>
 
-      {/* 异常/关注记录 & Agent 工作情况 */}
+      {/* 异常记录 & Agent 工作情况 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="panel p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h3 className="font-semibold flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-warning" /> 异常/关注记录
+              <h3 className="text-base font-semibold flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-warning" /> 异常记录
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">来自巡检异常与关注记录 · 建议尽快处置</p>
             </div>
@@ -148,8 +120,8 @@ export default function Dashboard() {
 
         <div className="panel p-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" /> Agent 工作情况
+            <h3 className="text-base font-semibold flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" /> Agent 工作情况
             </h3>
             <StatusBadge tone="success" dot>在线</StatusBadge>
           </div>
@@ -189,26 +161,27 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* CPU 趋势 */}
+        {/* 近 7 天巡检异常趋势 */}
         <div className="panel p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-semibold flex items-center gap-2"><Cpu className="h-4 w-4 text-primary" /> 关键主机 CPU 24h 趋势</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">数据源：Zabbix · 单位：%</p>
+              <h3 className="text-base font-semibold flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />近 7 天巡检异常趋势
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">每日巡检产生的关注项与异常项数量</p>
             </div>
-            <StatusBadge tone="info" dot>实时</StatusBadge>
+            <StatusBadge tone="info">近 7 天</StatusBadge>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={cpuTrend} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+              <LineChart data={weeklyInspectionTrend} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" fontSize={12} interval={3} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} domain={[0, 100]} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="app-svc-01" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="app-web-01" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="db-master-01" stroke="hsl(var(--warning))" strokeWidth={2} dot={false} />
+                <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={14} interval={0} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={14} allowDecimals={false} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 14 }} />
+                <Legend wrapperStyle={{ fontSize: 14 }} />
+                <Line type="monotone" dataKey="关注项" stroke="hsl(var(--warning))" strokeWidth={2.5} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="异常项" stroke="hsl(var(--destructive))" strokeWidth={2.5} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -217,8 +190,8 @@ export default function Dashboard() {
         {/* 最新报告 */}
         <div className="panel p-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold flex items-center gap-2">
-              <FileText className="h-4 w-4 text-primary" /> 最新报告
+            <h3 className="text-base font-semibold flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" /> 最新报告
             </h3>
             <Button asChild variant="ghost" size="sm" className="text-xs">
               <Link to="/reports">全部 <ArrowUpRight className="ml-1 h-3 w-3" /></Link>
@@ -239,15 +212,5 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
-  );
-}
-
-
-function Metric({ icon: Icon, value, alert }: { icon: any; value: string; alert?: boolean }) {
-  return (
-    <span className={`inline-flex items-center gap-1 tabular-nums ${alert ? "text-destructive font-medium" : ""}`}>
-      <Icon className="h-3 w-3" />
-      {value}
-    </span>
   );
 }

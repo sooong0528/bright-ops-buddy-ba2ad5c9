@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   RefreshCw, Search, Clock, Eye, Stethoscope, MessageSquareQuote,
-  MoreHorizontal, Bot, Ban, RotateCcw, CheckCircle2, FileText, Loader2, XCircle,
+  MoreHorizontal, Ban, RotateCcw, CheckCircle2, FileText, Loader2, XCircle, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/StatusBadge";
+import { StatCard, StatCardGrid } from "@/components/StatCard";
 import { toast } from "@/hooks/use-toast";
 import {
   abnormalRecords, type AbnormalRecord,
@@ -91,21 +92,21 @@ export default function AbnormalRecords() {
 
   const stats = useMemo(() => ({
     pending: abnormalRecords.filter((r) => r.status === "待处理").length,
-    analyzed: abnormalRecords.filter((r) => r.analysisStatus === "已分析").length,
+    abnormal: abnormalRecords.filter((r) => r.currentLevel === "异常").length,
+    attention: abnormalRecords.filter((r) => r.currentLevel === "关注").length,
     recovered: abnormalRecords.filter((r) => r.status === "已恢复").length,
-    ignored: abnormalRecords.filter((r) => r.status === "已忽略").length,
   }), []);
 
   const activeRecord = activeRecordId ? abnormalRecords.find((r) => r.id === activeRecordId) ?? null : null;
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <SummaryTile icon={Clock} label="待处理" value={String(stats.pending)} tone="warning" />
-        <SummaryTile icon={Bot} label="已分析" value={String(stats.analyzed)} tone="info" />
-        <SummaryTile icon={CheckCircle2} label="已恢复" value={String(stats.recovered)} tone="success" />
-        <SummaryTile icon={Ban} label="已忽略" value={String(stats.ignored)} tone="muted" />
-      </div>
+      <StatCardGrid>
+        <StatCard icon={Clock} title="待处理" value={stats.pending} tone="warning" description="需要继续跟踪处置" />
+        <StatCard icon={XCircle} title="异常" value={stats.abnormal} tone="destructive" description="当前级别为异常" />
+        <StatCard icon={AlertTriangle} title="关注" value={stats.attention} tone="warning" description="当前级别为关注" />
+        <StatCard icon={CheckCircle2} title="已恢复" value={stats.recovered} tone="success" description="已恢复正常的记录" />
+      </StatCardGrid>
 
       <div className="filter-bar">
         <div className="flex flex-wrap items-center gap-2">
@@ -282,32 +283,6 @@ export default function AbnormalRecords() {
         onRetryAnalysis={(r) => { setActiveRecordId(null); goRetryAnalysis(r); }}
         onAsk={(r) => { setActiveRecordId(null); askAbout(r); }}
       />
-    </div>
-  );
-}
-
-function SummaryTile({
-  icon: Icon, label, value, tone, sub,
-}: {
-  icon: any; label: string; value: string; tone: "success" | "warning" | "destructive" | "info" | "muted"; sub?: string;
-}) {
-  const map: Record<string, string> = {
-    success: "text-success bg-success-soft",
-    warning: "text-warning bg-warning-soft",
-    destructive: "text-destructive bg-destructive-soft",
-    info: "text-info bg-info-soft",
-    muted: "text-muted-foreground bg-muted",
-  };
-  return (
-    <div className="stat-card flex items-center gap-3">
-      <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${map[tone]}`}>
-        <Icon className="h-5 w-5" />
-      </div>
-      <div className="min-w-0">
-        <div className="text-2xl font-semibold tabular-nums leading-none">{value}</div>
-        <div className="text-xs text-muted-foreground mt-1 truncate">{sub ?? label}</div>
-        {sub && <div className="text-sm text-muted-foreground/80">{label}</div>}
-      </div>
     </div>
   );
 }

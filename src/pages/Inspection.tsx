@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
 import { RunDetailSheet } from "@/components/RunDetailSheet";
+import { StatCard, StatCardGrid } from "@/components/StatCard";
 import {
   inspectionTasks,
   inspectionRuns,
@@ -93,12 +94,12 @@ export default function Inspection() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <SummaryTile icon={ListChecks} label="巡检完成率" value={`${runStats.completionRate}%`} tone="info" sub={`已完成 ${runStats.finished} / 共 ${runStats.totalRuns} 次`} />
-        <SummaryTile icon={CheckCircle2} label="已完成" value={String(runStats.finished)} tone="success" />
-        <SummaryTile icon={Clock} label="运行中" value={String(runStats.running)} tone="warning" />
-        <SummaryTile icon={AlertTriangle} label="产生异常/关注记录" value={String(runStats.abnormal + runStats.attention)} tone="destructive" sub={`异常 ${runStats.abnormal} · 关注 ${runStats.attention}`} />
-      </div>
+      <StatCardGrid>
+        <StatCard icon={ListChecks} title="巡检完成率" value={`${runStats.completionRate}%`} tone="info" description={`已完成 ${runStats.finished} / 共 ${runStats.totalRuns} 次`} />
+        <StatCard icon={CheckCircle2} title="已完成" value={runStats.finished} tone="success" description="已结束的巡检任务" />
+        <StatCard icon={Clock} title="运行中" value={runStats.running} tone="warning" description="正在执行的巡检任务" />
+        <StatCard icon={AlertTriangle} title="异常记录" value={runStats.abnormal + runStats.attention} tone="destructive" description={`异常 ${runStats.abnormal} · 关注 ${runStats.attention}`} />
+      </StatCardGrid>
 
       <div className="filter-bar">
         <div className="flex items-center gap-2">
@@ -197,31 +198,6 @@ export default function Inspection() {
       </div>
 
       <RunDetailSheet run={activeRun} task={activeTask} onClose={closeRun} />
-    </div>
-  );
-}
-
-function SummaryTile({
-  icon: Icon, label, value, tone, sub,
-}: {
-  icon: any; label: string; value: string; tone: "success" | "warning" | "destructive" | "info"; sub?: string;
-}) {
-  const map: Record<string, string> = {
-    success: "text-success bg-success-soft",
-    warning: "text-warning bg-warning-soft",
-    destructive: "text-destructive bg-destructive-soft",
-    info: "text-info bg-info-soft",
-  };
-  return (
-    <div className="stat-card flex items-center gap-3">
-      <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${map[tone]}`}>
-        <Icon className="h-5 w-5" />
-      </div>
-      <div className="min-w-0">
-        <div className="text-2xl font-semibold tabular-nums leading-none">{value}</div>
-        <div className="text-xs text-muted-foreground mt-1 truncate">{sub ?? label}</div>
-        {sub && <div className="text-sm text-muted-foreground/80">{label}</div>}
-      </div>
     </div>
   );
 }
