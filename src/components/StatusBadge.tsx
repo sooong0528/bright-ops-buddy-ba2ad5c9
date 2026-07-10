@@ -21,7 +21,7 @@ export function StatusBadge({ tone = "muted", children, dot = false, className }
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[12px] leading-[18px] font-medium",
         toneMap[tone],
         className
       )}
