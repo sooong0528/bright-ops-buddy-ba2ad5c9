@@ -27,7 +27,6 @@ export interface CheckItemConfig {
   enabled: boolean;
   warn: string;   // 关注条件
   crit: string;   // 异常条件
-  window: string; // 判定窗口
   optional?: boolean;
 }
 
@@ -71,33 +70,33 @@ export interface InspectionTask {
 /** 各资产类型默认推荐巡检项 */
 export const defaultCheckItemsByAssetType: Record<AssetType, CheckItemConfig[]> = {
   主机: [
-    { key: "cpu", name: "CPU 利用率", enabled: true, warn: "≥75%", crit: "≥90%", window: "10 分钟平均值" },
-    { key: "mem", name: "内存使用率", enabled: true, warn: "≥75%", crit: "≥90%", window: "10 分钟平均值" },
-    { key: "disk", name: "磁盘使用率", enabled: true, warn: "≥75%", crit: "≥90%", window: "30 分钟最大值" },
-    { key: "ping", name: "Ping 连通性", enabled: true, warn: "1 次失败", crit: "连续 3 次失败", window: "最近 3 次" },
+    { key: "cpu", name: "CPU 利用率", enabled: true, warn: "≥75%", crit: "≥90%" },
+    { key: "mem", name: "内存使用率", enabled: true, warn: "≥75%", crit: "≥90%" },
+    { key: "disk", name: "磁盘使用率", enabled: true, warn: "≥75%", crit: "≥90%" },
+    { key: "ping", name: "Ping 连通性", enabled: true, warn: "1 次失败", crit: "连续 3 次失败" },
   ],
   应用服务: [
-    { key: "port", name: "端口存活", enabled: true, warn: "1 次失败", crit: "连续 3 次失败", window: "最近 3 次" },
-    { key: "http_status", name: "HTTP 状态码", enabled: true, warn: "非 200", crit: "连续 3 次非 200", window: "最近 3 次" },
-    { key: "http_rt", name: "HTTP 响应时间", enabled: true, warn: "≥1000ms", crit: "≥3000ms", window: "5 分钟平均值" },
-    { key: "app_err_log", name: "应用错误日志数", enabled: true, warn: "≥10 条", crit: "≥50 条", window: "10 分钟" },
-    { key: "access_5xx", name: "访问日志 5xx 数", enabled: true, warn: "≥10 条", crit: "≥50 条", window: "10 分钟" },
+    { key: "port", name: "端口存活", enabled: true, warn: "1 次失败", crit: "连续 3 次失败" },
+    { key: "http_status", name: "HTTP 状态码", enabled: true, warn: "非 200", crit: "连续 3 次非 200" },
+    { key: "http_rt", name: "HTTP 响应时间", enabled: true, warn: "≥1000ms", crit: "≥3000ms" },
+    { key: "app_err_log", name: "应用错误日志数", enabled: true, warn: "≥10 条", crit: "≥50 条" },
+    { key: "access_5xx", name: "访问日志 5xx 数", enabled: true, warn: "≥10 条", crit: "≥50 条" },
   ],
   数据库: [
-    { key: "db_avail", name: "数据库可用性", enabled: true, warn: "-", crit: "不可用", window: "当前状态" },
-    { key: "port", name: "端口存活", enabled: true, warn: "1 次失败", crit: "连续 3 次失败", window: "最近 3 次" },
-    { key: "conn", name: "连接数使用率", enabled: true, warn: "≥70%", crit: "≥90%", window: "5 分钟平均值" },
-    { key: "slow_sql", name: "慢查询数", enabled: true, warn: "≥10 次", crit: "≥50 次", window: "10 分钟" },
-    { key: "data_disk", name: "数据盘使用率", enabled: true, warn: "≥75%", crit: "≥90%", window: "30 分钟最大值" },
-    { key: "repl_lag", name: "主从延迟", enabled: false, warn: "≥30s", crit: "≥120s", window: "5 分钟平均值", optional: true },
+    { key: "db_avail", name: "数据库可用性", enabled: true, warn: "-", crit: "不可用" },
+    { key: "port", name: "端口存活", enabled: true, warn: "1 次失败", crit: "连续 3 次失败" },
+    { key: "conn", name: "连接数使用率", enabled: true, warn: "≥70%", crit: "≥90%" },
+    { key: "slow_sql", name: "慢查询数", enabled: true, warn: "≥10 次", crit: "≥50 次" },
+    { key: "data_disk", name: "数据盘使用率", enabled: true, warn: "≥75%", crit: "≥90%" },
+    { key: "repl_lag", name: "主从延迟", enabled: false, warn: "≥30s", crit: "≥120s", optional: true },
   ],
   中间件: [
-    { key: "port", name: "端口存活", enabled: true, warn: "1 次失败", crit: "连续 3 次失败", window: "最近 3 次" },
-    { key: "proc", name: "进程存活", enabled: true, warn: "-", crit: "进程不存在", window: "当前状态" },
-    { key: "conn", name: "连接数", enabled: true, warn: "≥70%", crit: "≥90%", window: "5 分钟平均值" },
-    { key: "mem", name: "内存使用率", enabled: true, warn: "≥75%", crit: "≥90%", window: "10 分钟平均值" },
-    { key: "queue_lag", name: "消息堆积 / 延迟", enabled: false, warn: "≥1000", crit: "≥5000", window: "10 分钟", optional: true },
-    { key: "err_log", name: "错误日志数", enabled: true, warn: "≥10 条", crit: "≥50 条", window: "10 分钟" },
+    { key: "port", name: "端口存活", enabled: true, warn: "1 次失败", crit: "连续 3 次失败" },
+    { key: "proc", name: "进程存活", enabled: true, warn: "-", crit: "进程不存在" },
+    { key: "conn", name: "连接数", enabled: true, warn: "≥70%", crit: "≥90%" },
+    { key: "mem", name: "内存使用率", enabled: true, warn: "≥75%", crit: "≥90%" },
+    { key: "queue_lag", name: "消息堆积 / 延迟", enabled: false, warn: "≥1000", crit: "≥5000", optional: true },
+    { key: "err_log", name: "错误日志数", enabled: true, warn: "≥10 条", crit: "≥50 条" },
   ],
 };
 
@@ -141,7 +140,7 @@ export interface Asset {
   environment: Environment;
   importance: Importance;
   status: "在用" | "停用";
-  owner: string;             // 运维责任人
+  ownerIds: string[];        // 关联 UserItem.id，可多选
   description?: string;
   // 类型专有字段（简化，按类型选择性使用）
   os?: string;
@@ -501,15 +500,15 @@ export const alerts: AlertItem[] = [
 
 /* ========== 资产 ========== */
 export const assets: Asset[] = [
-  { id: "as1", code: "HOST-0001", name: "app-svc-01", type: "主机", businessSystem: "核心交易系统", ip: "10.20.2.21", port: "22/8080", hostname: "app-svc-01.corp", environment: "生产", importance: "核心", status: "在用", owner: "张运维", os: "CentOS 7.9", location: "北京-A 机房 3-05", spec: "8C16G / 500G SSD", observationStatus: "已配置" },
-  { id: "as2", code: "HOST-0002", name: "app-web-01", type: "主机", businessSystem: "核心交易系统", ip: "10.20.1.11", port: "22/80", hostname: "app-web-01.corp", environment: "生产", importance: "重要", status: "在用", owner: "王巡检", os: "CentOS 7.9", location: "北京-A 机房 3-01", spec: "4C8G / 200G", observationStatus: "已配置" },
-  { id: "as3", code: "HOST-0003", name: "mq-01", type: "主机", businessSystem: "消息平台", ip: "10.20.5.51", port: "22", hostname: "mq-01.corp", environment: "生产", importance: "核心", status: "在用", owner: "张运维", os: "Ubuntu 22.04", location: "北京-B 机房 2-08", spec: "8C32G / 1T", observationStatus: "部分配置" },
-  { id: "as4", code: "DB-0001", name: "db-master-01 (核心库主)", type: "数据库", businessSystem: "核心交易系统", ip: "10.20.3.31", port: "3306", environment: "生产", importance: "核心", status: "在用", owner: "李管理", dbType: "MySQL 8.0", dbInstance: "core-master", dbSchema: "trade_core", dbRole: "主库", observationStatus: "已配置" },
-  { id: "as5", code: "DB-0002", name: "db-slave-01 (核心库从)", type: "数据库", businessSystem: "核心交易系统", ip: "10.20.3.32", port: "3306", environment: "生产", importance: "重要", status: "在用", owner: "李管理", dbType: "MySQL 8.0", dbInstance: "core-slave", dbSchema: "trade_core", dbRole: "从库", observationStatus: "已配置" },
-  { id: "as6", code: "APP-0001", name: "订单服务 order-svc", type: "应用服务", businessSystem: "核心交易系统", ip: "10.20.2.21", port: "8080", environment: "生产", importance: "核心", status: "在用", owner: "张运维", serviceType: "SpringBoot", serviceCode: "order-svc", serviceUrl: "http://order.corp/api", observationStatus: "已配置" },
-  { id: "as7", code: "APP-0002", name: "网关服务 gateway", type: "应用服务", businessSystem: "核心交易系统", ip: "10.20.1.11", port: "80", environment: "生产", importance: "核心", status: "在用", owner: "王巡检", serviceType: "Nginx", serviceCode: "gateway", serviceUrl: "http://api.corp", observationStatus: "已配置" },
-  { id: "as8", code: "MW-0001", name: "RabbitMQ 主集群", type: "中间件", businessSystem: "消息平台", ip: "10.20.5.51", port: "5672", environment: "生产", importance: "核心", status: "在用", owner: "张运维", mwType: "RabbitMQ", mwVersion: "3.12", observationStatus: "部分配置" },
-  { id: "as9", code: "MW-0002", name: "Redis 缓存集群", type: "中间件", businessSystem: "核心交易系统", ip: "10.20.4.41", port: "6379", environment: "生产", importance: "重要", status: "在用", owner: "王巡检", mwType: "Redis", mwVersion: "7.0", observationStatus: "未配置" },
+  { id: "as1", code: "HOST-0001", name: "app-svc-01", type: "主机", businessSystem: "核心交易系统", ip: "10.20.2.21", port: "22/8080", hostname: "app-svc-01.corp", environment: "生产", importance: "核心", status: "在用", ownerIds: ["u2"], os: "CentOS 7.9", location: "北京-A 机房 3-05", spec: "8C16G / 500G SSD", observationStatus: "已配置" },
+  { id: "as2", code: "HOST-0002", name: "app-web-01", type: "主机", businessSystem: "核心交易系统", ip: "10.20.1.11", port: "22/80", hostname: "app-web-01.corp", environment: "生产", importance: "重要", status: "在用", ownerIds: ["u3"], os: "CentOS 7.9", location: "北京-A 机房 3-01", spec: "4C8G / 200G", observationStatus: "已配置" },
+  { id: "as3", code: "HOST-0003", name: "mq-01", type: "主机", businessSystem: "消息平台", ip: "10.20.5.51", port: "22", hostname: "mq-01.corp", environment: "生产", importance: "核心", status: "在用", ownerIds: ["u2"], os: "Ubuntu 22.04", location: "北京-B 机房 2-08", spec: "8C32G / 1T", observationStatus: "部分配置" },
+  { id: "as4", code: "DB-0001", name: "db-master-01 (核心库主)", type: "数据库", businessSystem: "核心交易系统", ip: "10.20.3.31", port: "3306", environment: "生产", importance: "核心", status: "在用", ownerIds: ["u1"], dbType: "MySQL 8.0", dbInstance: "core-master", dbSchema: "trade_core", dbRole: "主库", observationStatus: "已配置" },
+  { id: "as5", code: "DB-0002", name: "db-slave-01 (核心库从)", type: "数据库", businessSystem: "核心交易系统", ip: "10.20.3.32", port: "3306", environment: "生产", importance: "重要", status: "在用", ownerIds: ["u1"], dbType: "MySQL 8.0", dbInstance: "core-slave", dbSchema: "trade_core", dbRole: "从库", observationStatus: "已配置" },
+  { id: "as6", code: "APP-0001", name: "订单服务 order-svc", type: "应用服务", businessSystem: "核心交易系统", ip: "10.20.2.21", port: "8080", environment: "生产", importance: "核心", status: "在用", ownerIds: ["u2"], serviceType: "SpringBoot", serviceCode: "order-svc", serviceUrl: "http://order.corp/api", observationStatus: "已配置" },
+  { id: "as7", code: "APP-0002", name: "网关服务 gateway", type: "应用服务", businessSystem: "核心交易系统", ip: "10.20.1.11", port: "80", environment: "生产", importance: "核心", status: "在用", ownerIds: ["u3"], serviceType: "Nginx", serviceCode: "gateway", serviceUrl: "http://api.corp", observationStatus: "已配置" },
+  { id: "as8", code: "MW-0001", name: "RabbitMQ 主集群", type: "中间件", businessSystem: "消息平台", ip: "10.20.5.51", port: "5672", environment: "生产", importance: "核心", status: "在用", ownerIds: ["u2"], mwType: "RabbitMQ", mwVersion: "3.12", observationStatus: "部分配置" },
+  { id: "as9", code: "MW-0002", name: "Redis 缓存集群", type: "中间件", businessSystem: "核心交易系统", ip: "10.20.4.41", port: "6379", environment: "生产", importance: "重要", status: "在用", ownerIds: ["u3"], mwType: "Redis", mwVersion: "7.0", observationStatus: "未配置" },
 ];
 
 export const observationConfigs: Record<string, ObservationConfig> = {

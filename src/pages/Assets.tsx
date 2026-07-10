@@ -1,12 +1,12 @@
 import { useState, useMemo } from "react";
-import { Server, Database, Layers, Package, Search, Plus, Settings2, Activity, FileText, Pencil, Trash2, RefreshCw, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
+import { Server, Database, Layers, Package, Search, Plus, Settings2, Activity, FileText, Pencil, Trash2, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, ChevronDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { assets as initialAssets, observationConfigs, type Asset, type AssetType, type Environment } from "@/lib/mockData";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { assets as initialAssets, observationConfigs, users, type Asset, type AssetType, type Environment } from "@/lib/mockData";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const typeMeta: Record<AssetType, { icon: any; color: string; bg: string }> = {
   主机: { icon: Server, color: "text-primary", bg: "bg-primary-soft" },
@@ -26,6 +27,14 @@ const typeMeta: Record<AssetType, { icon: any; color: string; bg: string }> = {
 
 const assetTypes: AssetType[] = ["主机", "数据库", "应用服务", "中间件"];
 const environments: Environment[] = ["生产", "预生产", "测试"];
+
+function ownerUsers(ownerIds: string[]) {
+  return ownerIds.map((id) => users.find((user) => user.id === id)).filter(Boolean) as typeof users;
+}
+
+function ownerNames(ownerIds: string[]) {
+  return ownerUsers(ownerIds).map((user) => user.name).join("、") || "—";
+}
 
 /* ========= 观测配置可选池 ========= */
 const zabbixHostPool: { name: string; itemCount: number }[] = [
@@ -40,53 +49,81 @@ const zabbixHostPool: { name: string; itemCount: number }[] = [
   { name: "gateway-01", itemCount: 104 },
 ];
 
-type RecommendedMetric = { name: string; description: string; suggestedItems: string[] };
+const zabbixItemKeys = [
+  "system.cpu.util",
+  "vm.memory.utilization",
+  "vfs.fs.pused[/]",
+  "vfs.fs.pused[/data]",
+  "icmpping",
+  "net.if.in",
+  "net.if.out",
+  "proc.num",
+  "system.uptime",
+  "kernel.maxfiles",
+  "mysql.ping",
+  "mysql.threads_connected",
+  "mysql.slow_queries",
+  "mysql.max_connections.pused",
+  "mysql.replication.status",
+  "mysql.seconds_behind_master",
+  "net.tcp.service[tcp,,3306]",
+  "net.tcp.service[tcp,,8080]",
+  "net.tcp.service[tcp,,5672]",
+  "web.page.get[health]",
+  "web.page.perf[health]",
+  "proc.num[java]",
+  "proc.num[mw]",
+  "mw.connections",
+  "mw.cluster.status",
+];
+
+type RecommendedMetric = { name: string; description: string; suggestedItem: string };
 
 // 每类资产的核心推荐巡检项（含建议匹配的 Zabbix Item key）
 const recommendedMetricsByType: Record<AssetType, RecommendedMetric[]> = {
   主机: [
-    { name: "CPU 利用率", description: "判断计算资源是否过高", suggestedItems: ["system.cpu.util"] },
-    { name: "内存使用率", description: "判断内存是否紧张", suggestedItems: ["vm.memory.utilization"] },
-    { name: "磁盘使用率", description: "判断磁盘是否快满", suggestedItems: ["vfs.fs.pused[/]", "vfs.fs.pused[/data]"] },
-    { name: "Ping 连通性", description: "判断主机网络是否可达", suggestedItems: ["icmpping"] },
+    { name: "CPU 利用率", description: "判断计算资源是否过高", suggestedItem: "system.cpu.util" },
+    { name: "内存使用率", description: "判断内存是否紧张", suggestedItem: "vm.memory.utilization" },
+    { name: "磁盘使用率", description: "判断磁盘是否快满", suggestedItem: "vfs.fs.pused[/]" },
+    { name: "Ping 连通性", description: "判断主机网络是否可达", suggestedItem: "icmpping" },
   ],
   数据库: [
-    { name: "数据库可用性", description: "MySQL ping / 数据库连通", suggestedItems: ["mysql.ping"] },
-    { name: "端口存活", description: "3306 是否可访问", suggestedItems: ["net.tcp.service[tcp,,3306]"] },
-    { name: "当前连接数", description: "判断连接压力", suggestedItems: ["mysql.threads_connected"] },
-    { name: "最大连接数使用率", description: "判断是否接近连接上限", suggestedItems: ["mysql.max_connections.pused"] },
-    { name: "慢查询数", description: "判断 SQL 性能异常", suggestedItems: ["mysql.slow_queries"] },
-    { name: "主从复制状态", description: "主从场景下判断复制是否中断", suggestedItems: ["mysql.replication.status"] },
-    { name: "主从延迟", description: "主从场景下判断延迟是否过高", suggestedItems: ["mysql.seconds_behind_master"] },
-    { name: "数据盘使用率", description: "判断数据目录磁盘是否快满", suggestedItems: ["vfs.fs.pused[/data]"] },
+    { name: "数据库可用性", description: "MySQL ping / 数据库连通", suggestedItem: "mysql.ping" },
+    { name: "端口存活", description: "3306 是否可访问", suggestedItem: "net.tcp.service[tcp,,3306]" },
+    { name: "当前连接数", description: "判断连接压力", suggestedItem: "mysql.threads_connected" },
+    { name: "最大连接数使用率", description: "判断是否接近连接上限", suggestedItem: "mysql.max_connections.pused" },
+    { name: "慢查询数", description: "判断 SQL 性能异常", suggestedItem: "mysql.slow_queries" },
+    { name: "主从复制状态", description: "主从场景下判断复制是否中断", suggestedItem: "mysql.replication.status" },
+    { name: "主从延迟", description: "主从场景下判断延迟是否过高", suggestedItem: "mysql.seconds_behind_master" },
+    { name: "数据盘使用率", description: "判断数据目录磁盘是否快满", suggestedItem: "vfs.fs.pused[/data]" },
   ],
   应用服务: [
-    { name: "端口存活", description: "服务端口是否可访问", suggestedItems: ["net.tcp.service[tcp,,8080]"] },
-    { name: "HTTP 状态码", description: "健康检查接口是否返回 200", suggestedItems: ["web.page.get[health]"] },
-    { name: "HTTP 响应时间", description: "判断服务响应是否变慢", suggestedItems: ["web.page.perf[health]"] },
-    { name: "进程存活", description: "应用进程是否存在", suggestedItems: ["proc.num[java]"] },
-    { name: "所在主机 CPU 利用率", description: "承载主机 CPU", suggestedItems: ["system.cpu.util"] },
-    { name: "所在主机内存使用率", description: "承载主机内存", suggestedItems: ["vm.memory.utilization"] },
-    { name: "所在主机磁盘使用率", description: "承载主机磁盘", suggestedItems: ["vfs.fs.pused[/]"] },
+    { name: "端口存活", description: "服务端口是否可访问", suggestedItem: "net.tcp.service[tcp,,8080]" },
+    { name: "HTTP 状态码", description: "健康检查接口是否返回 200", suggestedItem: "web.page.get[health]" },
+    { name: "HTTP 响应时间", description: "判断服务响应是否变慢", suggestedItem: "web.page.perf[health]" },
+    { name: "进程存活", description: "应用进程是否存在", suggestedItem: "proc.num[java]" },
+    { name: "所在主机 CPU 利用率", description: "承载主机 CPU", suggestedItem: "system.cpu.util" },
+    { name: "所在主机内存使用率", description: "承载主机内存", suggestedItem: "vm.memory.utilization" },
+    { name: "所在主机磁盘使用率", description: "承载主机磁盘", suggestedItem: "vfs.fs.pused[/]" },
   ],
   中间件: [
-    { name: "服务端口存活", description: "判断中间件是否可访问", suggestedItems: ["net.tcp.service[tcp,,5672]"] },
-    { name: "进程存活", description: "判断进程是否存在", suggestedItems: ["proc.num[mw]"] },
-    { name: "连接数", description: "判断连接压力", suggestedItems: ["mw.connections"] },
-    { name: "内存使用", description: "判断运行内存是否紧张", suggestedItems: ["vm.memory.utilization"] },
-    { name: "磁盘使用率", description: "Kafka、MQ 等尤其重要", suggestedItems: ["vfs.fs.pused[/data]"] },
-    { name: "集群状态", description: "集群类中间件需要", suggestedItems: ["mw.cluster.status"] },
+    { name: "服务端口存活", description: "判断中间件是否可访问", suggestedItem: "net.tcp.service[tcp,,5672]" },
+    { name: "进程存活", description: "判断进程是否存在", suggestedItem: "proc.num[mw]" },
+    { name: "连接数", description: "判断连接压力", suggestedItem: "mw.connections" },
+    { name: "内存使用", description: "判断运行内存是否紧张", suggestedItem: "vm.memory.utilization" },
+    { name: "磁盘使用率", description: "Kafka、MQ 等尤其重要", suggestedItem: "vfs.fs.pused[/data]" },
+    { name: "集群状态", description: "集群类中间件需要", suggestedItem: "mw.cluster.status" },
   ],
 };
 
 // 一个资产始终只对应 1 个主 Host；若同一应用部署在多台机器，应分别建为独立资产
 const isSinglePrimaryHost = (_t: AssetType) => true;
 
-type MetricMapping = { metric: string; matchedItems: string[] };
+type MetricMapping = { metric: string; matchedItem?: string };
 type LogSourceEntry = { name: string; logType: string; filter: string; enabled: boolean };
 
 type EditableConfig = {
-  hostMappings: Record<string, MetricMapping[]>;   // host -> per-metric matched items
+  hostMappings: Record<string, MetricMapping[]>;   // host -> per-metric matched item
   logSources: LogSourceEntry[];                    // 资产级日志源
 };
 
@@ -112,7 +149,7 @@ const recommendedLogsByType: Record<AssetType, LogSourceEntry[]> = {
 };
 
 function seedHostMapping(type: AssetType): MetricMapping[] {
-  return recommendedMetricsByType[type].map((m) => ({ metric: m.name, matchedItems: [...m.suggestedItems] }));
+  return recommendedMetricsByType[type].map((m) => ({ metric: m.name, matchedItem: m.suggestedItem }));
 }
 
 function initConfigs(): Record<string, EditableConfig> {
@@ -129,14 +166,14 @@ function initConfigs(): Record<string, EditableConfig> {
 }
 
 function metricStatus(m: MetricMapping): "已匹配" | "未匹配" {
-  return m.matchedItems.length > 0 ? "已匹配" : "未匹配";
+  return m.matchedItem ? "已匹配" : "未匹配";
 }
 
 function statusOf(cfg?: EditableConfig): Asset["observationStatus"] {
   if (!cfg) return "未配置";
   const hosts = Object.keys(cfg.hostMappings);
   const matchedMetricCount = hosts.reduce(
-    (n, h) => n + (cfg.hostMappings[h]?.filter((m) => m.matchedItems.length > 0).length ?? 0),
+    (n, h) => n + (cfg.hostMappings[h]?.filter((m) => m.matchedItem).length ?? 0),
     0,
   );
   const hasItems = hosts.length > 0 && matchedMetricCount > 0;
@@ -159,7 +196,7 @@ const emptyForm: FormState = {
   environment: "生产",
   importance: "一般",
   status: "在用",
-  owner: "",
+  ownerIds: [],
   description: "",
   observationStatus: "未配置",
 };
@@ -205,7 +242,7 @@ export default function Assets() {
   };
 
   const handleSave = () => {
-    if (!form.code?.trim() || !form.name?.trim() || !form.ip?.trim() || !form.businessSystem?.trim() || !form.owner?.trim()) {
+    if (!form.code?.trim() || !form.name?.trim() || !form.ip?.trim() || !form.businessSystem?.trim() || !form.ownerIds?.length) {
       toast({ title: "请填写完整", description: "资产编码、名称、业务系统、IP、责任人 均为必填", variant: "destructive" });
       return;
     }
@@ -315,7 +352,7 @@ export default function Assets() {
                   <TableCell className="text-sm">{a.businessSystem}</TableCell>
                   <TableCell className="text-xs font-mono text-muted-foreground">{a.ip}{a.port ? ` : ${a.port}` : ""}</TableCell>
                   <TableCell><StatusBadge tone={a.environment === "生产" ? "destructive" : "muted"}>{a.environment}</StatusBadge></TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{a.owner}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{ownerNames(a.ownerIds)}</TableCell>
                   <TableCell><StatusBadge tone={obsTone} dot>{obsStatus}</StatusBadge></TableCell>
                   <TableCell className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     <Button size="sm" variant="ghost" onClick={() => setObsEditId(a.id)}>
@@ -398,7 +435,10 @@ export default function Assets() {
               </Select>
             </Field>
             <Field label="责任人" required>
-              <Input value={form.owner ?? ""} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
+              <OwnerMultiSelect
+                value={form.ownerIds ?? []}
+                onChange={(ownerIds) => setForm({ ...form, ownerIds })}
+              />
             </Field>
             <Field label="主机名 / Hostname">
               <Input value={form.hostname ?? ""} onChange={(e) => setForm({ ...form, hostname: e.target.value })} />
@@ -492,6 +532,50 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
+function OwnerMultiSelect({ value, onChange }: { value: string[]; onChange: (ownerIds: string[]) => void }) {
+  const options = users.filter((user) => user.status === "启用" || value.includes(user.id));
+
+  const toggle = (userId: string) => {
+    onChange(value.includes(userId) ? value.filter((id) => id !== userId) : [...value, userId]);
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          aria-label="选择责任人"
+          className="w-full justify-between font-normal"
+        >
+          <span className={value.length ? "truncate" : "text-muted-foreground"}>
+            {value.length ? ownerNames(value) : "请选择责任人"}
+          </span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-[360px]">
+        {options.map((user) => (
+          <DropdownMenuCheckboxItem
+            key={user.id}
+            checked={value.includes(user.id)}
+            onSelect={(event) => event.preventDefault()}
+            onCheckedChange={() => toggle(user.id)}
+            className="gap-2 py-2"
+          >
+            <span className="font-medium">{user.name}</span>
+            <span className="font-mono text-xs text-muted-foreground">{user.account}</span>
+            <StatusBadge tone={user.role === "系统管理员" ? "destructive" : user.role === "运维人员" ? "info" : "muted"}>
+              {user.role}
+            </StatusBadge>
+            {user.status === "停用" && <span className="text-xs text-destructive">已停用</span>}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /* ============ 观测配置编辑器（左 Host 列表；右 推荐巡检项映射 + 资产级日志源） ============ */
 function ObservationEditor({
   asset, value, onCancel, onSave,
@@ -522,7 +606,7 @@ function ObservationEditor({
   );
 
   const matchedCountOfHost = (h: string) =>
-    (hostMappings[h] ?? []).filter((m) => m.matchedItems.length > 0).length;
+    (hostMappings[h] ?? []).filter((m) => m.matchedItem).length;
 
   const toggleHost = (h: string) => {
     setHostMappings((prev) => {
@@ -547,20 +631,30 @@ function ObservationEditor({
     });
   };
 
-  const updateMapping = (host: string, metric: string, items: string[]) => {
+  const updateMapping = (host: string, metric: string, item?: string) => {
+    const mappings = hostMappings[host] ?? [];
+    if (item && mappings.some((mapping) => mapping.metric !== metric && mapping.matchedItem === item)) {
+      toast({ title: "无法重复绑定", description: "该 Item 已关联其他巡检项", variant: "destructive" });
+      return;
+    }
     setHostMappings((prev) => ({
       ...prev,
-      [host]: (prev[host] ?? []).map((m) => (m.metric === metric ? { ...m, matchedItems: items } : m)),
+      [host]: (prev[host] ?? []).map((m) => (m.metric === metric ? { ...m, matchedItem: item } : m)),
     }));
   };
 
   const addCustomMetric = () => {
     if (!activeHost || !customMetric.name.trim()) return;
+    const item = customMetric.item.trim();
+    if (item && (hostMappings[activeHost] ?? []).some((mapping) => mapping.matchedItem === item)) {
+      toast({ title: "无法重复绑定", description: "该 Item 已关联其他巡检项", variant: "destructive" });
+      return;
+    }
     setHostMappings((prev) => ({
       ...prev,
       [activeHost]: [
         ...(prev[activeHost] ?? []),
-        { metric: customMetric.name.trim(), matchedItems: customMetric.item.trim() ? [customMetric.item.trim()] : [] },
+        { metric: customMetric.name.trim(), matchedItem: item || undefined },
       ],
     }));
     setCustomMetric({ name: "", item: "" });
@@ -579,7 +673,7 @@ function ObservationEditor({
   const removeLog = (idx: number) => setLogSources((prev) => prev.filter((_, i) => i !== idx));
 
   const activeMappings = activeHost ? hostMappings[activeHost] ?? [] : [];
-  const matchedMetrics = activeMappings.filter((m) => m.matchedItems.length > 0).length;
+  const matchedMetrics = activeMappings.filter((m) => m.matchedItem).length;
 
   const primaryHost = selectedHosts[0] ?? null;
   const primaryHostMeta = primaryHost ? zabbixHostPool.find((h) => h.name === primaryHost) : null;
@@ -588,10 +682,10 @@ function ObservationEditor({
     <div className="flex flex-col h-full">
       <SheetHeader className="px-6 pt-6 pb-3 border-b">
         <SheetTitle className="text-base">编辑观测配置 · {asset.name}</SheetTitle>
-        <p className="text-xs text-muted-foreground font-normal">
+        <SheetDescription className="text-xs font-normal">
           本页用于维护当前资产的数据来源。<span className="text-foreground">关联 Zabbix Host</span> 与 <span className="text-foreground">日志源配置</span> 是两类平级的数据来源，日志源不隶属于任何 Host。
           一个资产只能关联 1 个主 Host；若同一应用部署在多台机器，请分别建为独立资产。
-        </p>
+        </SheetDescription>
       </SheetHeader>
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 min-h-0">
@@ -679,8 +773,11 @@ function ObservationEditor({
                   <TableBody>
                     {activeMappings.map((m) => {
                       const rec = recommended.find((r) => r.name === m.metric);
-                      const matched = m.matchedItems.length > 0;
+                      const matched = Boolean(m.matchedItem);
                       const isEditing = editingMetric === m.metric;
+                      const selectableItems = zabbixItemKeys.filter(
+                        (item) => item === m.matchedItem || !activeMappings.some((other) => other.metric !== m.metric && other.matchedItem === item),
+                      );
                       return (
                         <TableRow key={m.metric} className="text-xs">
                           <TableCell className="align-top py-2">
@@ -691,25 +788,27 @@ function ObservationEditor({
                           </TableCell>
                           <TableCell className="align-top py-2">
                             {isEditing ? (
-                              <Input
-                                autoFocus
-                                defaultValue={m.matchedItems.join(", ")}
-                                onBlur={(e) => {
-                                  const items = e.target.value.split(",").map((x) => x.trim()).filter(Boolean);
-                                  updateMapping(primaryHost, m.metric, items);
+                              <Select
+                                value={m.matchedItem ?? "__none__"}
+                                onValueChange={(value) => {
+                                  updateMapping(primaryHost, m.metric, value === "__none__" ? undefined : value);
                                   setEditingMetric(null);
                                 }}
-                                className="h-7 text-xs font-mono"
-                                placeholder="填写 Zabbix Item key，逗号分隔"
-                              />
+                              >
+                                <SelectTrigger aria-label={`选择 Zabbix Item - ${m.metric}`} className="h-8 text-xs font-mono">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__" className="text-xs">清除绑定</SelectItem>
+                                  {selectableItems.map((item) => (
+                                    <SelectItem key={item} value={item} className="text-xs font-mono">{item}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             ) : matched ? (
-                              <div className="flex flex-wrap gap-1">
-                                {m.matchedItems.map((it) => (
-                                  <Badge key={it} variant="secondary" className="text-[11px] font-mono font-normal">
-                                    {it}
-                                  </Badge>
-                                ))}
-                              </div>
+                              <Badge variant="secondary" className="text-[11px] font-mono font-normal">
+                                {m.matchedItem}
+                              </Badge>
                             ) : (
                               <span className="text-muted-foreground italic">未匹配到 Item</span>
                             )}
@@ -776,9 +875,7 @@ function ObservationEditor({
                   <div className="border-t px-3 py-2 bg-muted/10 text-[11px] text-muted-foreground">
                     <div className="mb-1 font-medium text-foreground">全部 Item（预览）</div>
                     <div className="grid grid-cols-3 gap-x-3 gap-y-1 max-h-40 overflow-y-auto font-mono">
-                      {["system.cpu.util", "vm.memory.utilization", "vfs.fs.pused[/]", "vfs.fs.pused[/data]", "icmpping",
-                        "net.if.in", "net.if.out", "proc.num", "system.uptime", "kernel.maxfiles",
-                        "mysql.ping", "mysql.threads_connected", "mysql.slow_queries"].map((k) => (
+                      {zabbixItemKeys.map((k) => (
                         <span key={k}>{k}</span>
                       ))}
                     </div>
@@ -905,7 +1002,12 @@ function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: Ed
             <Info label="观测配置" value={statusOf(cfg)} />
             <Info label="状态" value={asset.status} />
             <Info label="IP / 端口" value={`${asset.ip}${asset.port ? ` : ${asset.port}` : ""}`} />
-            <Info label="责任人" value={asset.owner} />
+            <Info
+              label="责任人"
+              value={ownerUsers(asset.ownerIds)
+                .map((user) => `${user.name}（${user.account} · ${user.role}${user.status === "停用" ? " · 已停用" : ""}）`)
+                .join("、") || "—"}
+            />
             {asset.os && <Info label="操作系统" value={asset.os} />}
             {asset.location && <Info label="机房位置" value={asset.location} />}
             {asset.spec && <Info label="规格" value={asset.spec} />}
@@ -926,7 +1028,7 @@ function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: Ed
             <div className="space-y-2">
               {hosts.map((h) => {
                 const mappings = cfg?.hostMappings[h] ?? [];
-                const matched = mappings.filter((m) => m.matchedItems.length > 0).length;
+                const matched = mappings.filter((m) => m.matchedItem).length;
                 return (
                   <div key={h} className="rounded-lg border bg-card p-3">
                     <div className="flex items-center justify-between mb-2">
@@ -940,7 +1042,7 @@ function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: Ed
                         <div key={m.metric} className="flex items-start justify-between gap-2 text-xs">
                           <span className="text-foreground/90 flex-shrink-0">{m.metric}</span>
                           <span className="text-muted-foreground font-mono text-[11px] text-right truncate">
-                            {m.matchedItems.length > 0 ? m.matchedItems.join(", ") : "未匹配"}
+                            {m.matchedItem ?? "未匹配"}
                           </span>
                         </div>
                       ))}

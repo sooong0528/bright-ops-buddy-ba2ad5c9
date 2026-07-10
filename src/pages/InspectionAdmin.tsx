@@ -763,7 +763,6 @@ function SchemeEditorSheet({
                     <TableHead>巡检项</TableHead>
                     <TableHead>关注条件</TableHead>
                     <TableHead>异常条件</TableHead>
-                    <TableHead>判定窗口</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -781,9 +780,6 @@ function SchemeEditorSheet({
                       </TableCell>
                       <TableCell>
                         <Input className="h-8 w-32" value={item.crit} onChange={(e) => updateCheckItem(item.key, { crit: e.target.value })} />
-                      </TableCell>
-                      <TableCell>
-                        <Input className="h-8 w-36" value={item.window} onChange={(e) => updateCheckItem(item.key, { window: e.target.value })} />
                       </TableCell>
                     </TableRow>
                   ))}
