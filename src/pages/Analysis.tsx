@@ -18,11 +18,12 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "@/hooks/use-toast";
 import { StatCard, StatCardGrid } from "@/components/StatCard";
+import { TableActions, type TableAction } from "@/components/TableActions";
 
 function statusTone(s: AnalysisTaskStatus) {
   switch (s) {
     case "分析中": return "info" as const;
-    case "已分析": return "success" as const;
+    case "分析完成": return "success" as const;
     case "分析失败": return "destructive" as const;
   }
 }
@@ -39,7 +40,7 @@ export default function Analysis() {
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (keyword) {
       const k = keyword.toLowerCase();
-      if (![t.id, t.assetName, t.metric, t.businessSystem, t.recordId].some((s) => s.toLowerCase().includes(k))) return false;
+      if (![t.id, t.assetName, t.metric, t.businessSystem, t.recordId ?? ""].some((s) => s.toLowerCase().includes(k))) return false;
     }
     return true;
   }), [statusFilter, keyword]);
@@ -49,7 +50,7 @@ export default function Analysis() {
   const stats = useMemo(() => ({
     total: analysisTasks.length,
     analyzing: analysisTasks.filter((t) => t.status === "分析中").length,
-    done: analysisTasks.filter((t) => t.status === "已分析").length,
+    done: analysisTasks.filter((t) => t.status === "分析完成").length,
     failed: analysisTasks.filter((t) => t.status === "分析失败").length,
   }), []);
 
@@ -58,7 +59,7 @@ export default function Analysis() {
       <StatCardGrid>
         <StatCard title="分析任务总数" value={stats.total} icon={Wrench} tone="primary" description="全部故障分析任务" />
         <StatCard title="分析中" value={stats.analyzing} icon={Loader2} tone="info" description="正在汇总证据与建议" />
-        <StatCard title="已分析" value={stats.done} icon={CheckCircle2} tone="success" description="已形成分析结果" />
+        <StatCard title="分析完成" value={stats.done} icon={CheckCircle2} tone="success" description="已形成分析结果" />
         <StatCard title="分析失败" value={stats.failed} icon={XCircle} tone="destructive" description="需要重新发起分析" />
       </StatCardGrid>
 
@@ -73,7 +74,7 @@ export default function Analysis() {
             <SelectContent>
               <SelectItem value="all">全部状态</SelectItem>
               <SelectItem value="分析中">分析中</SelectItem>
-              <SelectItem value="已分析">已分析</SelectItem>
+              <SelectItem value="分析完成">分析完成</SelectItem>
               <SelectItem value="分析失败">分析失败</SelectItem>
             </SelectContent>
           </Select>
@@ -104,7 +105,16 @@ export default function Analysis() {
               </TableRow>
             ) : filtered.map((t) => (
               <TableRow key={t.id} className="hover:bg-secondary/40 cursor-pointer" onClick={() => setOpenId(t.id)}>
-                <TableCell className="text-sm font-medium">{t.assetName}<div className="text-xs text-muted-foreground">{t.metric}</div></TableCell>
+                <TableCell className="text-sm font-medium">
+                  <button
+                    type="button"
+                    className="text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:text-primary"
+                    onClick={(event) => { event.stopPropagation(); setOpenId(t.id); }}
+                  >
+                    {t.assetName}
+                  </button>
+                  <div className="text-xs text-muted-foreground">{t.metric}</div>
+                </TableCell>
                 <TableCell className="text-xs">{t.assetType}</TableCell>
                 <TableCell className="text-xs">{t.businessSystem}</TableCell>
                 <TableCell><StatusBadge tone={t.currentLevel === "异常" ? "destructive" : "warning"}>{t.currentLevel}</StatusBadge></TableCell>
@@ -114,28 +124,12 @@ export default function Analysis() {
                 <TableCell className="text-xs text-muted-foreground tabular-nums">{t.createdAt}</TableCell>
                 <TableCell className="text-xs text-muted-foreground tabular-nums">{t.completedAt ?? "—"}</TableCell>
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                  {t.status === "分析中" && (
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setOpenId(t.id)}>
-                      <Clock className="h-3 w-3 mr-1" />查看进度
-                    </Button>
-                  )}
-                  {t.status === "已分析" && (
-                    <div className="inline-flex items-center gap-1">
-                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setOpenId(t.id)}>
-                        <FileText className="h-3 w-3 mr-1" />查看报告
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                        onClick={() => toast({ title: "已发起重新分析", description: `${t.id} · 使用异常记录最新数据` })}>
-                        <RotateCcw className="h-3 w-3 mr-1" />重新分析
-                      </Button>
-                    </div>
-                  )}
-                  {t.status === "分析失败" && (
-                    <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                      onClick={() => toast({ title: "已发起重新分析", description: `${t.id}` })}>
-                      <RotateCcw className="h-3 w-3 mr-1" />重新分析
-                    </Button>
-                  )}
+                  <TableActions actions={([
+                    ...(t.status !== "分析中" ? [{
+                      label: "重新分析",
+                      onClick: () => toast({ title: "已发起重新分析", description: `${t.id} · 使用异常记录最新数据` }),
+                    }] : []),
+                  ] satisfies TableAction[])} />
                 </TableCell>
               </TableRow>
             ))}
@@ -143,15 +137,19 @@ export default function Analysis() {
         </Table>
         <div className="flex items-center justify-between px-5 py-3 border-t bg-muted/20 text-xs text-muted-foreground">
           <span>共 {filtered.length} 条分析任务</span>
-          <span>分析中 {stats.analyzing} · 已分析 {stats.done} · 分析失败 {stats.failed}</span>
+          <span>分析中 {stats.analyzing} · 分析完成 {stats.done} · 分析失败 {stats.failed}</span>
         </div>
       </div>
 
       <Sheet open={!!selected} onOpenChange={(o) => !o && setOpenId(null)}>
         <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
           {selected && <AnalysisDetail task={selected} onGoAssistant={(t) => {
-            sessionStorage.setItem("assistant.pendingReportContext", JSON.stringify({
-              id: t.id, title: `${t.assetName} · ${t.metric}`, type: "故障分析",
+            sessionStorage.setItem("assistant.context", JSON.stringify({
+              sourceType: "故障分析",
+              sourceId: t.id,
+              title: `${t.assetName} · ${t.metric}`,
+              displayTime: t.completedAt ?? t.createdAt,
+              snapshot: `数据窗口 ${t.dataWindow}`,
             }));
             navigate("/assistant");
           }} />}
@@ -176,8 +174,10 @@ function AnalysisDetail({ task, onGoAssistant }: { task: AnalysisTask; onGoAssis
       </SheetHeader>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <StatusBadge tone={task.currentLevel === "异常" ? "destructive" : "warning"}>当前级别 {task.currentLevel}</StatusBadge>
-        
+        <StatusBadge tone={task.currentLevel === "异常" ? "destructive" : "warning"}>分析时级别 {task.currentLevel}</StatusBadge>
+        <StatusBadge tone="muted">版本 V{task.version}</StatusBadge>
+        <StatusBadge tone="muted">数据窗口 {task.dataWindow}</StatusBadge>
+        <StatusBadge tone="muted">Trace {task.traceId}</StatusBadge>
         <StatusBadge tone="muted">发起 {task.createdBy} · {task.createdAt}</StatusBadge>
       </div>
 
@@ -223,7 +223,7 @@ function AnalysisDetail({ task, onGoAssistant }: { task: AnalysisTask; onGoAssis
         </div>
       )}
 
-      {task.status === "已分析" && (
+      {task.status === "分析完成" && (
         <div className="mt-5 space-y-5">
           <Section title={<span className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-primary" />指标趋势</span>}>
             <div className="rounded-lg border bg-card p-3">
@@ -316,8 +316,8 @@ function AnalysisDetail({ task, onGoAssistant }: { task: AnalysisTask; onGoAssis
             <Button variant="outline" size="sm" onClick={() => onGoAssistant(task)}>
               <MessageSquare className="h-4 w-4 mr-1" />追问
             </Button>
-            <Button size="sm" onClick={() => { toast({ title: "已生成故障分析报告", description: "可在报告中心查看" }); navigate("/reports"); }}>
-              <FileText className="h-4 w-4 mr-1" />生成报告
+            <Button size="sm" onClick={() => navigate(task.reportId ? `/reports?report=${task.reportId}` : "/reports")}>
+              <FileText className="h-4 w-4 mr-1" />{task.reportId ? "查看报告" : "生成报告"}
             </Button>
           </div>
         </div>

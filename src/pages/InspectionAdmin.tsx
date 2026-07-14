@@ -4,10 +4,6 @@ import {
   PlayCircle,
   Plus,
   Pencil,
-  Trash2,
-  MoreHorizontal,
-  Power,
-  PowerOff,
   History,
   ListChecks,
   Clock,
@@ -49,13 +45,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -72,12 +61,18 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
+import { TableActions } from "@/components/TableActions";
 import {
   inspectionTasks as initialTasks,
   inspectionRuns as initialRuns,
   assets,
   observationConfigs,
-  defaultCheckItemsByAssetType,
+  buildInspectionRunSnapshot,
+  getCheckItemsByAssetType,
+  inspectionItems,
+  inspectionRunSnapshots,
+  inspectionSchemeVersions,
+  zabbixHosts,
   type Asset,
   type AssetType,
   type Environment,
@@ -102,36 +97,26 @@ async function callInspectionAi(payload: Record<string, unknown>) {
 const ASSET_TYPES: AssetType[] = ["主机", "应用服务", "数据库", "中间件"];
 const ENVIRONMENTS: Environment[] = ["生产", "预生产", "测试"];
 
-const ITEM_KEY_TO_ZBX: Record<string, string[]> = {
-  cpu: ["system.cpu.util"],
-  mem: ["vm.memory.utilization"],
-  disk: ["vfs.fs.pused"],
-  data_disk: ["vfs.fs.pused"],
-  ping: ["icmpping"],
-  agent: ["agent.ping"],
-  port: ["net.tcp.service"],
-  http_status: ["web.page.get"],
-  http_rt: ["web.page.perf"],
-  proc: ["proc.num"],
-  conn: ["mysql.status[Threads_connected]", "redis.connected_clients"],
-  slow_sql: ["mysql.slow_queries"],
-  db_avail: ["mysql.ping"],
-  repl_lag: ["mysql.replication_lag"],
-  queue_lag: ["rabbitmq.queue.messages"],
-  app_err_log: [],
-  access_5xx: [],
-  err_log: [],
-};
-
 /** 一个资产对某个巡检项是否已在观测配置中映射 */
 function assetHasItem(asset: Asset, item: CheckItemConfig): "matched" | "unmatched" | "log" {
   const isLog = ["app_err_log", "access_5xx", "err_log"].includes(item.key);
   const cfg = observationConfigs[asset.id];
   if (isLog) return cfg && cfg.logSources.length > 0 ? "matched" : "unmatched";
-  const zbxKeys = ITEM_KEY_TO_ZBX[item.key] ?? [];
   if (!cfg) return "unmatched";
-  const has = cfg.items.some((it) => zbxKeys.some((k) => it.key.startsWith(k)));
-  return has ? "matched" : "unmatched";
+  const definition = inspectionItems.find((candidate) => candidate.assetType === asset.type && candidate.key === item.key);
+  return definition && cfg.itemMappings.some((mapping) => mapping.inspectionItemId === definition.id && mapping.zabbixItemId)
+    ? "matched"
+    : "unmatched";
+}
+
+function observationStatusOf(asset: Asset) {
+  const cfg = observationConfigs[asset.id];
+  if (!cfg) return "未配置" as const;
+  const hasItems = cfg.itemMappings.some((mapping) => mapping.zabbixItemId);
+  const hasLogs = cfg.logSources.some((log) => log.enabled);
+  if (hasItems && hasLogs) return "已配置" as const;
+  if (hasItems || hasLogs) return "部分配置" as const;
+  return "未配置" as const;
 }
 
 export default function InspectionAdmin() {
@@ -173,12 +158,35 @@ export default function InspectionAdmin() {
 
   function handleSave(data: InspectionTask) {
     if (editingTask) {
-      setTasks((prev) => prev.map((t) => (t.id === editingTask.id ? { ...t, ...data, id: editingTask.id } : t)));
-      toast.success("巡检方案已更新");
+      const version = (editingTask.version ?? 1) + 1;
+      const currentVersionId = `${editingTask.id}-v${version}`;
+      const updated = { ...editingTask, ...data, id: editingTask.id, version, currentVersionId };
+      inspectionSchemeVersions.push({
+        id: currentVersionId, schemeId: editingTask.id, version, effectiveAt: new Date().toISOString(),
+        scope: {
+          appliesTo: updated.appliesTo ?? "主机", scopeType: updated.scopeType ?? "指定资产",
+          businessSystems: [...(updated.businessSystems ?? [])], environments: [...(updated.environments ?? [])],
+          assetIds: [...(updated.assetIds ?? [])],
+        },
+        checkItems: (updated.checkItems ?? []).map((item) => ({ ...item })),
+      });
+      setTasks((prev) => prev.map((task) => task.id === editingTask.id ? updated : task));
+      toast.success(`巡检方案已更新为 V${version}`);
     } else {
       const id = "t" + Math.random().toString(36).slice(2, 7);
+      const currentVersionId = `${id}-v1`;
+      const created = { ...data, id, currentVersionId, version: 1, lastRun: "—", status: "待运行" as const, normal: 0, attention: 0, abnormal: 0, createdAt: new Date().toISOString().slice(0, 10), lastResult: "—" as const };
+      inspectionSchemeVersions.push({
+        id: currentVersionId, schemeId: id, version: 1, effectiveAt: new Date().toISOString(),
+        scope: {
+          appliesTo: created.appliesTo ?? "主机", scopeType: created.scopeType ?? "指定资产",
+          businessSystems: [...(created.businessSystems ?? [])], environments: [...(created.environments ?? [])],
+          assetIds: [...(created.assetIds ?? [])],
+        },
+        checkItems: (created.checkItems ?? []).map((item) => ({ ...item })),
+      });
       setTasks((prev) => [
-        { ...data, id, lastRun: "—", status: "待运行", normal: 0, attention: 0, abnormal: 0, createdAt: new Date().toISOString().slice(0, 10), lastResult: "—" },
+        created,
         ...prev,
       ]);
       toast.success("巡检方案已创建");
@@ -187,10 +195,8 @@ export default function InspectionAdmin() {
   }
   function handleDelete() {
     if (!deleteId) return;
-    setTasks((prev) => prev.filter((t) => t.id !== deleteId));
-    setRuns((prev) => prev.filter((r) => r.taskId !== deleteId));
-    toast.success("巡检方案已删除");
-    if (detailTaskId === deleteId) setDetailTaskId(null);
+    setTasks((prev) => prev.map((task) => task.id === deleteId ? { ...task, enabled: false } : task));
+    toast.success("巡检方案已停用，历史执行记录已保留");
     setDeleteId(null);
   }
   function toggleEnabled(t: InspectionTask) {
@@ -201,11 +207,12 @@ export default function InspectionAdmin() {
     const id = "run-" + Math.floor(Math.random() * 9000 + 1000);
     const fmt = new Date().toISOString().replace("T", " ").slice(0, 19);
     const newRun: InspectionRun = {
-      id, taskId: t.id, startTime: fmt, endTime: "—", duration: "进行中",
+      id, taskId: t.id, schemeVersionId: t.currentVersionId ?? `${t.id}-v1`, startTime: fmt, endTime: "—", duration: "进行中",
       status: "运行中", trigger: "手动", operator: "李管理",
       normal: 0, attention: 0, abnormal: 0,
       summary: "已触发，等待巡检分析 Agent 返回结果...",
     };
+    inspectionRunSnapshots[id] = buildInspectionRunSnapshot(newRun, t);
     setRuns((prev) => [newRun, ...prev]);
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: "运行中", lastRun: fmt } : x)));
     toast.success(`已触发 "${t.name}"`);
@@ -293,11 +300,11 @@ export default function InspectionAdmin() {
                 || t.metrics.length;
               const freq = t.frequency || t.schedule;
               return (
-                <TableRow key={t.id} className="hover:bg-secondary/40">
+                <TableRow key={t.id} className="hover:bg-secondary/40 cursor-pointer" onClick={() => setDetailTaskId(t.id)}>
                   <TableCell>
                     <button
                       className="font-medium text-left hover:text-primary transition-colors"
-                      onClick={() => setDetailTaskId(t.id)}
+                      onClick={(event) => { event.stopPropagation(); setDetailTaskId(t.id); }}
                     >
                       {t.name}
                     </button>
@@ -316,35 +323,14 @@ export default function InspectionAdmin() {
                       {t.lastResult || (t.abnormal > 0 ? "异常" : t.attention > 0 ? "关注" : "正常")}
                     </StatusBadge>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => runNow(t)} disabled={!t.enabled}>
-                        <PlayCircle className="h-4 w-4 mr-1" />执行
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem onClick={() => setDetailTaskId(t.id)}>
-                            <History className="h-4 w-4 mr-2" />查看详情
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEdit(t)}>
-                            <Pencil className="h-4 w-4 mr-2" />编辑
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toggleEnabled(t)}>
-                            {t.enabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
-                            {t.enabled ? "停用" : "启用"}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteId(t.id)}>
-                            <Trash2 className="h-4 w-4 mr-2" />删除
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                  <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                    <TableActions actions={[
+                      { label: "编辑方案", onClick: () => openEdit(t) },
+                      { label: "立即执行", onClick: () => runNow(t), disabled: !t.enabled },
+                      t.enabled
+                        ? { label: "停用", danger: true, onClick: () => setDeleteId(t.id) }
+                        : { label: "启用", onClick: () => toggleEnabled(t) },
+                    ]} />
                   </TableCell>
                 </TableRow>
               );
@@ -379,15 +365,15 @@ export default function InspectionAdmin() {
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除该巡检方案？</AlertDialogTitle>
+            <AlertDialogTitle>停用该巡检方案？</AlertDialogTitle>
             <AlertDialogDescription>
-              删除后方案及其执行历史将被移除，此操作不可撤销。
+              停用后不再执行新的巡检，已有执行记录、异常和报告将继续保留。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              确认删除
+              确认停用
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -418,7 +404,7 @@ function emptyScheme(): InspectionTask {
     businessSystems: [],
     environments: ["生产"],
     assetIds: [],
-    checkItems: JSON.parse(JSON.stringify(defaultCheckItemsByAssetType["主机"])) as CheckItemConfig[],
+    checkItems: getCheckItemsByAssetType("主机"),
     scheduleMode: "定时",
     frequency: "每 5 分钟",
     runAt: "",
@@ -454,7 +440,7 @@ function SchemeEditorSheet({
         ...task,
         appliesTo: task.appliesTo ?? seed.appliesTo,
         scopeType: task.scopeType ?? seed.scopeType,
-        checkItems: task.checkItems ?? JSON.parse(JSON.stringify(defaultCheckItemsByAssetType[task.appliesTo ?? "主机"])),
+        checkItems: task.checkItems ?? getCheckItemsByAssetType(task.appliesTo ?? "主机"),
       };
       setForm(merged);
     } else {
@@ -470,7 +456,7 @@ function SchemeEditorSheet({
     setForm((f) => ({
       ...f,
       appliesTo: t,
-      checkItems: JSON.parse(JSON.stringify(defaultCheckItemsByAssetType[t])) as CheckItemConfig[],
+      checkItems: getCheckItemsByAssetType(t),
       assetIds: [],
     }));
   }
@@ -492,7 +478,7 @@ function SchemeEditorSheet({
   }, [form.appliesTo, form.scopeType, form.businessSystems, form.assetIds, form.environments]);
 
   const uncoveredAssets = useMemo(
-    () => hitAssets.filter((a) => a.observationStatus !== "已配置"),
+    () => hitAssets.filter((a) => observationStatusOf(a) !== "已配置"),
     [hitAssets],
   );
 
@@ -718,6 +704,7 @@ function SchemeEditorSheet({
                   <div className="mt-1.5 rounded-md border max-h-56 overflow-y-auto divide-y">
                     {assetsOfType.map((a) => {
                       const on = (form.assetIds ?? []).includes(a.id);
+                      const observationStatus = observationStatusOf(a);
                       return (
                         <label key={a.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-secondary/40">
                           <Checkbox checked={on} onCheckedChange={() => toggleAssetId(a.id)} />
@@ -727,8 +714,8 @@ function SchemeEditorSheet({
                               {a.businessSystem} · {a.ip} · {a.environment}
                             </div>
                           </div>
-                          <StatusBadge tone={a.observationStatus === "已配置" ? "success" : a.observationStatus === "部分配置" ? "warning" : "destructive"}>
-                            {a.observationStatus}
+                          <StatusBadge tone={observationStatus === "已配置" ? "success" : observationStatus === "部分配置" ? "warning" : "destructive"}>
+                            {observationStatus}
                           </StatusBadge>
                         </label>
                       );
@@ -884,14 +871,16 @@ function SchemeEditorSheet({
                 <TableBody>
                   {hitAssets.slice(0, 20).map((a) => {
                     const cfg = observationConfigs[a.id];
+                    const host = cfg ? zabbixHosts.find((candidate) => candidate.id === cfg.zabbixHostId) : undefined;
+                    const observationStatus = observationStatusOf(a);
                     return (
                       <TableRow key={a.id}>
                         <TableCell className="text-sm">{a.name}</TableCell>
                         <TableCell className="text-sm text-muted-foreground tabular-nums">{a.ip}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{cfg?.zabbixHost || <span className="text-destructive">未绑定</span>}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{host?.name || <span className="text-destructive">未绑定</span>}</TableCell>
                         <TableCell>
-                          <StatusBadge tone={a.observationStatus === "已配置" ? "success" : a.observationStatus === "部分配置" ? "warning" : "destructive"}>
-                            {a.observationStatus === "已配置" ? "已完成" : "未完成"}
+                          <StatusBadge tone={observationStatus === "已配置" ? "success" : observationStatus === "部分配置" ? "warning" : "destructive"}>
+                            {observationStatus === "已配置" ? "已完成" : "未完成"}
                           </StatusBadge>
                         </TableCell>
                       </TableRow>
@@ -969,7 +958,7 @@ function TaskDetailSheet({
                 <SheetTitle className="text-lg">{task.name}</SheetTitle>
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="outline" onClick={() => onEdit(task)}>
-                    <Pencil className="h-4 w-4 mr-1" />编辑
+                    <Pencil className="h-4 w-4 mr-1" />编辑方案
                   </Button>
                   <Button size="sm" onClick={() => onRun(task)} disabled={!task.enabled}>
                     <PlayCircle className="h-4 w-4 mr-1" />立即执行

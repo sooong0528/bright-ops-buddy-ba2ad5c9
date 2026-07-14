@@ -1,4 +1,5 @@
-import { Plus, ShieldCheck, Eye, UserCog, MoreHorizontal, Users as UsersIcon } from "lucide-react";
+import { useState } from "react";
+import { Plus, ShieldCheck, Eye, UserCog, Users as UsersIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -13,8 +14,20 @@ import {
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
 import { users } from "@/lib/mockData";
 import { StatCard, StatCardGrid } from "@/components/StatCard";
+import { TableActions } from "@/components/TableActions";
+import { toast } from "@/hooks/use-toast";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 export default function UsersPage() {
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
+
+  const editUser = (user: (typeof users)[number]) => toast({ title: "编辑用户", description: user.name });
+  const toggleUser = (user: (typeof users)[number]) => toast({
+    title: `${user.status === "启用" ? "停用" : "启用"}用户`,
+    description: user.name,
+  });
+
   return (
     <div className="space-y-5">
       <StatCardGrid>
@@ -49,7 +62,7 @@ export default function UsersPage() {
           </TableHeader>
           <TableBody>
             {users.map((u) => (
-              <TableRow key={u.id} className="hover:bg-secondary/40">
+              <TableRow key={u.id} className="hover:bg-secondary/40 cursor-pointer" onClick={() => setSelectedUserId(u.id)}>
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar className="h-8 w-8">
@@ -57,7 +70,13 @@ export default function UsersPage() {
                         {u.name.charAt(0)}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="font-medium text-sm">{u.name}</span>
+                    <button
+                      type="button"
+                      className="font-medium text-sm text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:text-primary"
+                      onClick={(event) => { event.stopPropagation(); setSelectedUserId(u.id); }}
+                    >
+                      {u.name}
+                    </button>
                   </div>
                 </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{u.account}</TableCell>
@@ -69,14 +88,52 @@ export default function UsersPage() {
                 <TableCell className="text-sm text-muted-foreground">{u.department}</TableCell>
                 <TableCell><StatusBadge tone={statusTone(u.status)} dot>{u.status}</StatusBadge></TableCell>
                 <TableCell className="text-xs text-muted-foreground tabular-nums">{u.lastLogin}</TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                  <TableActions actions={[
+                    { label: "编辑用户", onClick: () => editUser(u) },
+                    { label: u.status === "启用" ? "停用" : "启用", onClick: () => toggleUser(u) },
+                  ]} />
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+
+      <Sheet open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUserId(null)}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          {selectedUser && (
+            <>
+              <SheetHeader>
+                <SheetTitle>{selectedUser.name}</SheetTitle>
+                <SheetDescription>{selectedUser.account} · {selectedUser.role}</SheetDescription>
+              </SheetHeader>
+              <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4 text-sm">
+                <UserInfo label="账号" value={selectedUser.account} />
+                <UserInfo label="角色" value={selectedUser.role} />
+                <UserInfo label="所属部门" value={selectedUser.department} />
+                <UserInfo label="状态" value={selectedUser.status} />
+                <UserInfo label="最近登录" value={selectedUser.lastLogin} />
+              </div>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => editUser(selectedUser)}>编辑用户</Button>
+                <Button variant="outline" size="sm" onClick={() => toggleUser(selectedUser)}>
+                  {selectedUser.status === "启用" ? "停用" : "启用"}
+                </Button>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+function UserInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-sm text-muted-foreground">{label}</div>
+      <div className="mt-1 font-medium">{value}</div>
     </div>
   );
 }

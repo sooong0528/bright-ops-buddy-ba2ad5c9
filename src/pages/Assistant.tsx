@@ -97,9 +97,10 @@ interface Msg {
 }
 
 interface ContextRef {
-  sourceType: "报告" | "巡检异常" | "关注项";
+  sourceType: "报告" | "巡检异常" | "关注项" | "故障分析";
   sourceId: string;
   title: string;
+  displayTime?: string;
   snapshot?: string;
 }
 
@@ -118,7 +119,13 @@ const initialConversations: Conversation[] = [
   {
     id: "c3", title: "app-svc-01 CPU 分析追问", category: "context", updatedAt: "昨天",
     messages: [welcomeMsg("context")],
-    context: { sourceType: "报告", sourceId: "r3", title: "app-svc-01 CPU 持续高位 故障分析报告" },
+    context: {
+      sourceType: "报告",
+      sourceId: "r3",
+      title: "app-svc-01 CPU 持续高位 故障分析报告",
+      displayTime: "2025-04-22 10:05",
+      snapshot: "故障分析报告",
+    },
   },
 ];
 
@@ -160,7 +167,13 @@ export default function Assistant() {
       const parsed = JSON.parse(raw);
       const ctx: ContextRef = parsed.sourceType
         ? parsed
-        : { sourceType: "报告", sourceId: parsed.id, title: parsed.title, snapshot: parsed.type };
+        : {
+          sourceType: "报告",
+          sourceId: parsed.id,
+          title: parsed.title,
+          displayTime: parsed.displayTime,
+          snapshot: parsed.type,
+        };
       const id = "c-" + Date.now();
       setConversations((cs) => [{
         id,
@@ -269,14 +282,7 @@ export default function Assistant() {
           </div>
         </div>
 
-        {!isWelcome && category === "context" && active.context && (
-          <div className="px-5 py-2 border-b bg-secondary/30 flex items-center gap-2">
-            <FileSearch className="h-4 w-4 text-primary shrink-0" />
-            <span className="text-xs text-muted-foreground">当前追问的上下文：</span>
-            <span className="text-xs font-medium">{active.context.title}</span>
-            <StatusBadge tone="info" className="ml-auto">{active.context.sourceType}</StatusBadge>
-          </div>
-        )}
+        {category === "context" && active.context && <ContextSource context={active.context} />}
 
         {isWelcome ? (
           <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-6">
@@ -335,6 +341,35 @@ export default function Assistant() {
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ContextSource({ context }: { context: ContextRef }) {
+  const timeLabel = context.sourceType === "报告"
+    ? "生成时间"
+    : context.sourceType === "故障分析"
+      ? "分析时间"
+      : "最近发生";
+
+  return (
+    <div className="border-b border-primary/20 bg-primary-soft/50 px-5 py-3" aria-label="追问来源">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+          <FileSearch className="h-4 w-4 text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">上下文追问来源</span>
+            <StatusBadge tone="info">{context.sourceType}</StatusBadge>
+          </div>
+          <div className="text-sm font-semibold text-foreground">{context.title}</div>
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            {context.displayTime && <span>{timeLabel}：{context.displayTime}</span>}
+            {context.snapshot && <span className="truncate">{context.snapshot}</span>}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,12 +1,12 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  FileText, Download, Plus, Calendar, Filter,
+  FileText, Download,
   ShieldCheck, AlertTriangle, BookOpen, TrendingUp,
-  Sparkles, Search, Star, Archive, MessageSquare, StickyNote, ArchiveRestore, MoreHorizontal,
+  Sparkles, Search, Star, MessageSquare, StickyNote, MoreHorizontal,
 } from "lucide-react";
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,13 +23,10 @@ import {
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { StatCard, StatCardGrid } from "@/components/StatCard";
+import { TableActions } from "@/components/TableActions";
 
 const categoryMeta: Record<ReportCategory, { icon: any; color: string; bg: string; desc: string }> = {
   巡检报告: {
@@ -53,50 +50,48 @@ const categoryMeta: Record<ReportCategory, { icon: any; color: string; bg: strin
 };
 
 interface ReportMeta {
-  archived: boolean;
   important: boolean;
   note: string;
 }
 
 export default function Reports() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [active, setActive] = useState<"全部" | ReportCategory>("全部");
   const [keyword, setKeyword] = useState("");
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
-  const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(() => searchParams.get("report"));
+  const [showImportant, setShowImportant] = useState(false);
 
-  // 用户侧标记（备注/重要/归档）—— 仅前端演示
-  const [meta, setMeta] = useState<Record<string, ReportMeta>>({});
+  // 用户侧标记（备注/重要）—— 仅前端演示
+  const [meta, setMeta] = useState<Record<string, ReportMeta>>({
+    [reports[0].id]: { important: true, note: "" },
+  });
   const getMeta = (id: string): ReportMeta =>
-    meta[id] ?? { archived: false, important: false, note: "" };
+    meta[id] ?? { important: false, note: "" };
   const updateMeta = (id: string, patch: Partial<ReportMeta>) =>
     setMeta((m) => ({ ...m, [id]: { ...getMeta(id), ...patch } }));
 
   const filtered = useMemo(() => {
     return reports.filter((r) => {
       const m = getMeta(r.id);
-      if (!showArchived && m.archived) return false;
-      if (showArchived && !m.archived) return false;
+      if (showImportant && !m.important) return false;
       if (active !== "全部" && r.category !== active) return false;
       if (keyword && !r.title.includes(keyword) && !r.summary.includes(keyword)) return false;
       return true;
     });
-  }, [active, keyword, meta, showArchived]);
+  }, [active, keyword, meta, showImportant]);
 
   const selected = openId ? reports.find((r) => r.id === openId) ?? null : null;
   const selMeta = selected ? getMeta(selected.id) : null;
 
   const stats = useMemo(() => {
-    const visible = reports.filter((r) => !getMeta(r.id).archived);
     return {
-      total: visible.length,
-      quality: visible.filter((r) => r.category === "巡检报告").length,
-      risk: visible.filter((r) => r.category === "故障分析报告").length,
-      knowledge: visible.filter((r) => r.category === "知识服务情况分析报告").length,
-      archivedCount: reports.length - visible.length,
+      total: reports.length,
+      quality: reports.filter((r) => r.category === "巡检报告").length,
+      risk: reports.filter((r) => r.category === "故障分析报告").length,
+      knowledge: reports.filter((r) => r.category === "知识服务情况分析报告").length,
     };
-  }, [meta]);
+  }, []);
 
   const handleExport = (r: ReportItem, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -109,28 +104,16 @@ export default function Reports() {
     toast({ title: m.important ? "已取消重要标记" : "已标记为重要" });
   };
 
-  const handleArchive = (r: ReportItem) => {
-    const m = getMeta(r.id);
-    if (m.archived) {
-      updateMeta(r.id, { archived: false });
-      toast({ title: "已恢复至默认列表" });
-    } else {
-      setArchiveConfirmId(r.id);
-    }
-  };
-
-  const confirmArchive = () => {
-    if (!archiveConfirmId) return;
-    updateMeta(archiveConfirmId, { archived: true });
-    toast({ title: "已归档", description: "可在「已归档」筛选中查看" });
-    setArchiveConfirmId(null);
-    setOpenId(null);
-  };
-
   const handleFollowup = (r: ReportItem) => {
     sessionStorage.setItem(
-      "assistant.pendingReportContext",
-      JSON.stringify({ id: r.id, title: r.title, type: r.category.replace("报告", "") }),
+      "assistant.context",
+      JSON.stringify({
+        sourceType: "报告",
+        sourceId: r.id,
+        title: r.title,
+        displayTime: r.generatedAt,
+        snapshot: r.category,
+      }),
     );
     navigate("/assistant");
   };
@@ -139,7 +122,7 @@ export default function Reports() {
     <div className="space-y-5">
       {/* 顶部统计概览 */}
       <StatCardGrid>
-        <StatCard title={showArchived ? "已归档报告" : "本月报告总数"} value={showArchived ? stats.archivedCount : stats.total} icon={FileText} tone="primary" description="当前统计周期" />
+        <StatCard title="本月报告总数" value={stats.total} icon={FileText} tone="primary" description="当前统计周期" />
         <StatCard title="巡检报告" value={stats.quality} icon={ShieldCheck} tone="success" description="日报 / 周报" />
         <StatCard title="故障分析报告" value={stats.risk} icon={AlertTriangle} tone="warning" description="由异常记录触发" />
         <StatCard title="知识服务报告" value={stats.knowledge} icon={BookOpen} tone="info" description="知识服务月报" />
@@ -157,9 +140,9 @@ export default function Reports() {
         </Tabs>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-2 px-3 h-9 rounded-md border bg-card">
-            <Switch id="archived-filter" checked={showArchived} onCheckedChange={setShowArchived} />
-            <Label htmlFor="archived-filter" className="text-xs cursor-pointer flex items-center gap-1">
-              <Archive className="h-3.5 w-3.5" />仅看已归档
+            <Switch id="important-filter" checked={showImportant} onCheckedChange={setShowImportant} />
+            <Label htmlFor="important-filter" className="text-xs cursor-pointer flex items-center gap-1">
+              <Star className="h-3.5 w-3.5" />仅看重要
             </Label>
           </div>
           <div className="relative">
@@ -171,19 +154,13 @@ export default function Reports() {
               className="w-56 pl-8 h-9"
             />
           </div>
-          <div className="relative">
-            <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="选择日期范围" className="w-44 pl-8 h-9" />
-          </div>
-          <Button variant="outline" size="sm"><Filter className="h-4 w-4 mr-1" />筛选</Button>
-          <Button size="sm"><Plus className="h-4 w-4 mr-1" />生成报告</Button>
         </div>
       </div>
 
       {/* 报告列表卡片（网格） */}
       {filtered.length === 0 ? (
         <div className="panel p-12 text-center text-sm text-muted-foreground">
-          {showArchived ? "暂无已归档报告" : "没有匹配的报告"}
+          {showImportant ? "暂无重要报告" : "没有匹配的报告"}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -215,44 +192,17 @@ export default function Reports() {
                     <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2.5em]">{r.summary}</p>
                     <div className="flex items-center gap-1.5 mt-2.5 text-xs text-muted-foreground flex-wrap">
                       <StatusBadge tone="info">{r.category}</StatusBadge>
-                      <StatusBadge tone="muted">{r.frequency}</StatusBadge>
-                      {m.archived && <StatusBadge tone="muted">已归档</StatusBadge>}
+                      {r.frequency && <StatusBadge tone="muted">{r.frequency}</StatusBadge>}
+                      <StatusBadge tone="muted">来源 {r.source.id}</StatusBadge>
                       {m.note && <StatusBadge tone="muted">已备注</StatusBadge>}
                     </div>
                     <div className="flex items-center justify-between mt-2.5 text-xs text-muted-foreground">
                       <span>周期 {r.period} · {r.generatedAt}</span>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0 -mr-1 text-muted-foreground hover:text-foreground"
-                            aria-label="更多操作"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleExport(r); }}>
-                            <Download className="h-4 w-4 mr-2" />导出
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleFollowup(r); }}>
-                            <MessageSquare className="h-4 w-4 mr-2" />追问
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleToggleImportant(r); }}>
-                            <Star className={cn("h-4 w-4 mr-2", m.important && "fill-warning text-warning")} />
-                            {m.important ? "取消重要" : "标记重要"}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleArchive(r); }}>
-                            {m.archived ? (
-                              <><ArchiveRestore className="h-4 w-4 mr-2" />恢复</>
-                            ) : (
-                              <><Archive className="h-4 w-4 mr-2" />归档</>
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <TableActions maxVisible={0} moreTrigger="icon" actions={[
+                        { label: "导出", onClick: () => handleExport(r) },
+                        { label: "追问", onClick: () => handleFollowup(r) },
+                        { label: m.important ? "取消重要" : "标记重要", onClick: () => handleToggleImportant(r) },
+                      ]} />
                     </div>
                   </div>
                 </div>
@@ -275,11 +225,9 @@ export default function Reports() {
                 <ReportHeader
                   report={selected}
                   important={selMeta.important}
-                  archived={selMeta.archived}
                   onExport={() => handleExport(selected)}
                   onFollowup={() => handleFollowup(selected)}
                   onToggleImportant={() => handleToggleImportant(selected)}
-                  onArchive={() => handleArchive(selected)}
                 />
                 <div className="mt-5 space-y-5 text-sm leading-relaxed">
                   {selected.category === "巡检报告" && <QualityReport report={selected} />}
@@ -295,13 +243,13 @@ export default function Reports() {
                       className="min-h-[88px] text-sm"
                     />
                     <p className="text-xs text-muted-foreground mt-1.5">
-                      备注会随报告一并归档留痕,仅当前用户可见。
+                      备注仅当前用户可见，不改变报告内容和业务状态。
                     </p>
                   </Section>
 
                   <div className="rounded-lg bg-muted/40 border border-dashed p-3 text-xs text-muted-foreground flex items-start gap-2">
                     <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
-                    <span>本报告由报告生成 Agent 自动整理,已存入审计留痕。如需修改,请由具备相应权限的用户在草稿状态下进行调整。</span>
+                    <span>本报告由报告生成 Agent 自动整理，已存入审计留痕。如需修订，应基于原来源任务生成新版本。</span>
                   </div>
                 </div>
               </div>
@@ -310,49 +258,34 @@ export default function Reports() {
         </SheetContent>
       </Sheet>
 
-      {/* 归档确认 */}
-      <AlertDialog open={!!archiveConfirmId} onOpenChange={(o) => !o && setArchiveConfirmId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>确认归档该报告？</AlertDialogTitle>
-            <AlertDialogDescription>
-              归档后报告将不再出现在默认列表，可通过「仅看已归档」筛选查看，也可随时恢复。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmArchive}>归档</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
 
 /* ---------- 报告头 ---------- */
 function ReportHeader({
-  report, important, archived,
-  onExport, onFollowup, onToggleImportant, onArchive,
+  report, important,
+  onExport, onFollowup, onToggleImportant,
 }: {
   report: ReportItem;
   important: boolean;
-  archived: boolean;
   onExport: () => void;
   onFollowup: () => void;
   onToggleImportant: () => void;
-  onArchive: () => void;
 }) {
   const meta = categoryMeta[report.category];
   const Icon = meta.icon;
   return (
-    <div className="flex items-start gap-3 pb-5 border-b">
+    <div className="flex items-start gap-3 pb-5 pr-10 border-b">
       <div className={`h-12 w-12 rounded-xl ${meta.bg} flex items-center justify-center shrink-0`}>
         <Icon className={`h-6 w-6 ${meta.color}`} />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 mb-2 flex-wrap">
           <StatusBadge tone="info">{report.category}</StatusBadge>
-          <StatusBadge tone="muted">{report.frequency}</StatusBadge>
+          {report.frequency && <StatusBadge tone="muted">{report.frequency}</StatusBadge>}
+          <StatusBadge tone="muted">来源 {report.source.type} · {report.source.id}</StatusBadge>
+          <StatusBadge tone="muted">Trace {report.traceId}</StatusBadge>
           <StatusBadge tone={statusTone(report.status)}>{report.status}</StatusBadge>
         </div>
         <div className="flex items-start justify-between gap-3">
@@ -374,14 +307,6 @@ function ReportHeader({
                 <DropdownMenuItem onClick={onToggleImportant}>
                   <Star className={cn("h-4 w-4 mr-2", important && "fill-warning text-warning")} />
                   {important ? "取消重要" : "标记重要"}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onArchive}>
-                  {archived ? (
-                    <><ArchiveRestore className="h-4 w-4 mr-2" />恢复</>
-                  ) : (
-                    <><Archive className="h-4 w-4 mr-2" />归档</>
-                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -485,6 +410,7 @@ function AnalysisReport({ report }: { report: ReportItem }) {
           <StatusBadge tone={sevTone}>{a.severity}</StatusBadge>
           <StatusBadge tone={pTone as any}>优先级 {a.priority}</StatusBadge>
           <StatusBadge tone="muted">异常记录 {a.recordId}</StatusBadge>
+          <StatusBadge tone="muted">分析任务 {a.analysisTaskId}</StatusBadge>
           <StatusBadge tone="info">{a.asset}</StatusBadge>
         </div>
         <p>{report.summary}</p>

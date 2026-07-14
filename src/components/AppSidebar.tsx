@@ -51,8 +51,8 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarContent className="bg-sidebar">
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
+        <div className={`flex items-center border-b border-sidebar-border ${collapsed ? "justify-center px-2 py-4" : "gap-3 px-4 py-5"}`}>
+          <div className={`flex shrink-0 items-center justify-center bg-gradient-primary shadow-glow ${collapsed ? "h-9 w-9 rounded-lg" : "h-10 w-10 rounded-xl"}`}>
             <Activity className="h-5 w-5 text-primary-foreground" />
           </div>
           {!collapsed && (
@@ -69,7 +69,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {mainItems.map((item) => (
                   <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton asChild tooltip={item.title}>
                       <NavLink
                         to={item.url}
                         end
@@ -93,7 +93,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {manageItems.map((item) => (
                 <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
                       to={item.url}
                       end

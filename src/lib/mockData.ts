@@ -30,8 +30,22 @@ export interface CheckItemConfig {
   optional?: boolean;
 }
 
+export interface InspectionItemDefinition {
+  id: string;
+  key: string;
+  name: string;
+  assetType: AssetType;
+  description: string;
+  defaultWarn: string;
+  defaultCrit: string;
+  optional?: boolean;
+  custom?: boolean;
+}
+
 export interface InspectionTask {
   id: string;
+  currentVersionId?: string;
+  version?: number;
   name: string;
   type: "日常巡检" | "周巡检" | "手动巡检";
   schedule: string;
@@ -100,9 +114,57 @@ export const defaultCheckItemsByAssetType: Record<AssetType, CheckItemConfig[]> 
   ],
 };
 
+const assetTypeCode: Record<AssetType, string> = {
+  主机: "host",
+  数据库: "database",
+  应用服务: "application",
+  中间件: "middleware",
+};
+
+export const inspectionItems: InspectionItemDefinition[] = Object.entries(defaultCheckItemsByAssetType)
+  .flatMap(([assetType, items]) => items.map((item) => ({
+    id: `${assetTypeCode[assetType as AssetType]}-${item.key}`,
+    key: item.key,
+    name: item.name,
+    assetType: assetType as AssetType,
+    description: `用于${assetType}${item.name}巡检`,
+    defaultWarn: item.warn,
+    defaultCrit: item.crit,
+    optional: item.optional,
+  })));
+
+export function getCheckItemsByAssetType(assetType: AssetType): CheckItemConfig[] {
+  return inspectionItems
+    .filter((item) => item.assetType === assetType)
+    .map((item) => ({
+      key: item.key,
+      name: item.name,
+      enabled: !item.optional,
+      warn: item.defaultWarn,
+      crit: item.defaultCrit,
+      optional: item.optional,
+    }));
+}
+
+export function registerCustomInspectionItem(item: Omit<InspectionItemDefinition, "id" | "custom">) {
+  const existing = inspectionItems.find((candidate) =>
+    candidate.assetType === item.assetType && candidate.name === item.name,
+  );
+  if (existing) return existing;
+
+  const created: InspectionItemDefinition = {
+    ...item,
+    id: `${assetTypeCode[item.assetType]}-custom-${Date.now()}`,
+    custom: true,
+  };
+  inspectionItems.push(created);
+  return created;
+}
+
 export interface InspectionRun {
   id: string;
   taskId: string;
+  schemeVersionId: string;
   startTime: string;
   endTime: string;
   duration: string;
@@ -113,6 +175,49 @@ export interface InspectionRun {
   attention: number;
   abnormal: number;
   summary: string;
+}
+
+export interface InspectionSchemeVersion {
+  id: string;
+  schemeId: string;
+  version: number;
+  effectiveAt: string;
+  scope: {
+    appliesTo: AssetType;
+    scopeType: SchemeScopeType;
+    businessSystems: string[];
+    environments: Environment[];
+    assetIds: string[];
+  };
+  checkItems: CheckItemConfig[];
+}
+
+export type RunItemLevel = "正常" | "关注" | "异常" | "无数据";
+
+export interface RunItemResult {
+  id: string;
+  runId: string;
+  assetId: string;
+  assetName: string;
+  assetType: AssetType;
+  businessSystem: string;
+  assetIp: string;
+  inspectionItemId: string;
+  inspectionItemName: string;
+  zabbixHostId?: string;
+  zabbixItemId?: string;
+  value: string;
+  level: RunItemLevel;
+  triggerRule: string;
+  collectedAt: string;
+}
+
+export interface InspectionRunSnapshot {
+  runId: string;
+  schemeVersionId: string;
+  capturedAt: string;
+  dataStatus: "完整" | "部分缺项" | "数据源不可用";
+  results: RunItemResult[];
 }
 
 export interface AlertItem {
@@ -155,30 +260,53 @@ export interface Asset {
   serviceUrl?: string;
   mwType?: string;
   mwVersion?: string;
+  /** 兼容列表初始值；页面状态由 ObservationConfig 计算 */
   observationStatus: "已配置" | "部分配置" | "未配置";
+}
+
+export interface ZabbixHost {
+  id: string;
+  name: string;
+  itemCount: number;
+}
+
+export interface ZabbixItem {
+  id: string;
+  hostId: string;
+  key: string;
+  name: string;
+}
+
+export interface InspectionItemMapping {
+  inspectionItemId: string;
+  zabbixItemId: string;
+}
+
+export interface LogSourceEntry {
+  id: string;
+  name: string;
+  logType: string;
+  filter: string;
+  enabled: boolean;
 }
 
 export interface ObservationConfig {
   assetId: string;
-  zabbixHost: string;                                    // 已映射的 Zabbix Host
-  items: { key: string; name: string; warn: number; crit: number; window: string }[]; // 指标 & 阈值
-  logSources: {
-    source: string;   // ES 索引 / Beat 名
-    path: string;     // 日志路径
-    logType: string;
-    window: string;
-    keywords: string[];
-  }[];
+  zabbixHostId: string;
+  itemMappings: InspectionItemMapping[];
+  logSources: LogSourceEntry[];
 }
 
 /* ========== 异常/关注记录 & 故障分析 ========== */
-export type RecordHandleStatus = "待处理" | "已恢复" | "已忽略";
-export type RecordAnalysisStatus = "未分析" | "分析中" | "已分析" | "分析失败";
+export type RecordLifecycleStatus = "活跃" | "已恢复" | "已关闭";
+export type RecordHandleStatus = "待处理" | "处理中" | "已确认" | "已忽略" | "已关闭";
+export type RecordAnalysisStatus = "未分析" | "分析中" | "分析完成" | "分析失败";
 
 export interface AbnormalRecord {
   id: string;
   taskId: string;              // 来源巡检任务
   runId: string;               // 来源巡检执行
+  sourceResultId: string;       // 来源指标结果快照
   sourceRunLabel?: string;     // 来源巡检显示名（方案 · 执行编号）
   assetId: string;
   assetName: string;
@@ -204,17 +332,19 @@ export interface AbnormalRecord {
   occurrences: number;
   description: string;
   evidenceSnapshot: string;    // 证据快照文字
+  lifecycleStatus: RecordLifecycleStatus;
   status: RecordHandleStatus;
   analysisStatus: RecordAnalysisStatus;
   analysisTaskId?: string;
   handleLog?: { time: string; actor: string; action: string; note?: string }[];
 }
 
-export type AnalysisTaskStatus = "分析中" | "已分析" | "分析失败";
+export type AnalysisTaskStatus = "分析中" | "分析完成" | "分析失败";
 
 export interface AnalysisTask {
   id: string;
-  recordId: string;
+  recordId?: string;
+  assetId: string;
   // 关联异常快照（用于列表展示）
   assetName: string;
   assetType: AssetType;
@@ -225,6 +355,10 @@ export interface AnalysisTask {
   /** 最高级别：本次问题周期内曾达到的最高级别 */
   maxLevel: AbnormalLevel;
   source: "异常记录" | "手动";
+  version: number;
+  dataWindow: string;
+  traceId: string;
+  reportId?: string;
   createdBy: string;
   createdAt: string;
   completedAt?: string;
@@ -246,7 +380,7 @@ export interface AnalysisTask {
     keyword: string;
     text: string;
   }[];
-  knowledgeRefs: { id: string; title: string; snippet: string; category: string }[];
+  knowledgeRefs: { id: string; version?: string; chunkId?: string; title: string; snippet: string; category: string }[];
   hypotheses: string[];       // 原因假设
   actions: string[];          // 处置建议
   humanConfirm: string[];     // 人工确认事项
@@ -264,12 +398,17 @@ export interface ReportItem {
   id: string;
   title: string;
   category: ReportCategory;
-  frequency: ReportFrequency;
+  frequency?: ReportFrequency;
   period: string;
   generatedAt: string;
   author: "系统自动" | string;
   summary: string;
-  status: "已归档" | "草稿";
+  status: "已生成" | "已归档" | "生成失败";
+  source: {
+    type: "巡检执行" | "故障分析任务" | "知识服务统计";
+    id: string;
+  };
+  traceId: string;
   quality?: {
     completionRate: number;
     coverageRate: number;
@@ -285,6 +424,7 @@ export interface ReportItem {
   // 故障分析报告
   analysis?: {
     recordId: string;
+    analysisTaskId: string;
     asset: string;
     severity: Severity;
     metricTrendSummary: string;
@@ -350,6 +490,12 @@ export interface AuditLog {
   result: "成功" | "失败";
   ip: string;
   category?: "用户操作" | "任务执行" | "Agent 调用" | "数据来源";
+  actorId?: string;
+  actionCode?: string;
+  entityType?: string;
+  entityId?: string;
+  traceId?: string;
+  failureReason?: string;
 }
 
 export interface AgentRun {
@@ -361,6 +507,9 @@ export interface AgentRun {
   startTime: string;
   input: string;
   output: string;
+  traceId?: string;
+  entityType?: string;
+  entityId?: string;
 }
 
 /* ========== Hosts / Tasks / Runs / Alerts（保留原样，供巡检模块使用） ========== */
@@ -441,7 +590,8 @@ export const inspectionTasks: InspectionTask[] = [
     description: "对消息与缓存中间件巡检端口 / 进程 / 连接数 / 错误日志。",
     appliesTo: "中间件", scopeType: "指定资产",
     businessSystems: [], assetIds: ["as8", "as9"],
-    checkItems: JSON.parse(JSON.stringify(defaultCheckItemsByAssetType["中间件"])),
+    checkItems: (JSON.parse(JSON.stringify(defaultCheckItemsByAssetType["中间件"])) as CheckItemConfig[])
+      .map((item) => item.key === "queue_lag" ? { ...item, enabled: true } : item),
     scheduleMode: "定时", frequency: "每小时", runAt: "0 * * * *",
     notifyMode: "通知资产负责人", notifyChannels: ["站内消息"], generateReport: false,
     lastResult: "异常",
@@ -475,20 +625,35 @@ export const inspectionTasks: InspectionTask[] = [
   },
 ];
 
+export const inspectionSchemeVersions: InspectionSchemeVersion[] = inspectionTasks.map((task) => ({
+  id: `${task.id}-v1`,
+  schemeId: task.id,
+  version: 1,
+  effectiveAt: `${task.createdAt} 00:00:00`,
+  scope: {
+    appliesTo: task.appliesTo ?? "主机",
+    scopeType: task.scopeType ?? "指定资产",
+    businessSystems: [...(task.businessSystems ?? [])],
+    environments: [...(task.environments ?? [])],
+    assetIds: [...(task.assetIds ?? [])],
+  },
+  checkItems: (task.checkItems ?? []).map((item) => ({ ...item })),
+}));
+
 
 export const inspectionRuns: InspectionRun[] = [
-  { id: "run-1024", taskId: "t1", startTime: "2025-04-22 08:00:02", endTime: "2025-04-22 08:01:14", duration: "1m 12s", status: "已完成", trigger: "定时", operator: "系统", normal: 6, attention: 2, abnormal: 2, summary: "app-svc-01 CPU 92%、mq-01 ICMP 失败，已生成异常摘要。" },
-  { id: "run-1023", taskId: "t1", startTime: "2025-04-21 08:00:01", endTime: "2025-04-21 08:01:08", duration: "1m 07s", status: "已完成", trigger: "定时", operator: "系统", normal: 7, attention: 1, abnormal: 0, summary: "db-master-01 内存 81%，触发关注。" },
-  { id: "run-1022", taskId: "t1", startTime: "2025-04-20 08:00:03", endTime: "2025-04-20 08:01:10", duration: "1m 07s", status: "已完成", trigger: "定时", operator: "系统", normal: 8, attention: 0, abnormal: 0, summary: "全部指标正常。" },
-  { id: "run-1021", taskId: "t1", startTime: "2025-04-19 08:00:00", endTime: "2025-04-19 08:01:21", duration: "1m 21s", status: "已完成", trigger: "定时", operator: "系统", normal: 7, attention: 1, abnormal: 0, summary: "app-web-02 CPU 短时升高至 73%。" },
-  { id: "run-1020", taskId: "t1", startTime: "2025-04-18 08:00:02", endTime: "2025-04-18 08:01:05", duration: "1m 03s", status: "失败", trigger: "定时", operator: "系统", normal: 0, attention: 0, abnormal: 0, summary: "Zabbix API 鉴权失败，任务中止。" },
-  { id: "run-2008", taskId: "t2", startTime: "2025-04-22 09:00:01", endTime: "2025-04-22 09:00:42", duration: "41s", status: "已完成", trigger: "定时", operator: "系统", normal: 1, attention: 1, abnormal: 0, summary: "db-master-01 内存升至 82%。" },
-  { id: "run-2007", taskId: "t2", startTime: "2025-04-21 09:00:00", endTime: "2025-04-21 09:00:38", duration: "38s", status: "已完成", trigger: "定时", operator: "系统", normal: 2, attention: 0, abnormal: 0, summary: "数据库节点全部正常。" },
-  { id: "run-3005", taskId: "t3", startTime: "2025-04-21 07:30:01", endTime: "2025-04-21 07:32:15", duration: "2m 14s", status: "已完成", trigger: "定时", operator: "系统", normal: 5, attention: 3, abnormal: 0, summary: "3 台主机磁盘使用率周环比上升 >5%。" },
-  { id: "run-4099", taskId: "t4", startTime: "2025-04-22 10:30:00", endTime: "—", duration: "进行中", status: "运行中", trigger: "定时", operator: "系统", normal: 7, attention: 0, abnormal: 1, summary: "mq-01 仍处于失联状态。" },
-  { id: "run-4098", taskId: "t4", startTime: "2025-04-22 10:00:00", endTime: "2025-04-22 10:00:18", duration: "18s", status: "已完成", trigger: "定时", operator: "系统", normal: 7, attention: 0, abnormal: 1, summary: "mq-01 ICMP 失败。" },
-  { id: "run-4097", taskId: "t4", startTime: "2025-04-22 09:30:00", endTime: "2025-04-22 09:30:16", duration: "16s", status: "已完成", trigger: "定时", operator: "系统", normal: 8, attention: 0, abnormal: 0, summary: "全部主机连通。" },
-  { id: "run-5001", taskId: "t5", startTime: "2025-04-22 10:12:33", endTime: "2025-04-22 10:13:45", duration: "1m 12s", status: "已完成", trigger: "手动", operator: "张运维", normal: 0, attention: 1, abnormal: 1, summary: "应急核查 app-svc-01 与 mq-01，确认异常持续。" },
+  { id: "run-1024", taskId: "t1", schemeVersionId: "t1-v1", startTime: "2025-04-22 08:00:02", endTime: "2025-04-22 08:01:14", duration: "1m 12s", status: "已完成", trigger: "定时", operator: "系统", normal: 6, attention: 2, abnormal: 2, summary: "app-svc-01 CPU 92%、mq-01 ICMP 失败，已生成异常摘要。" },
+  { id: "run-1023", taskId: "t1", schemeVersionId: "t1-v1", startTime: "2025-04-21 08:00:01", endTime: "2025-04-21 08:01:08", duration: "1m 07s", status: "已完成", trigger: "定时", operator: "系统", normal: 7, attention: 1, abnormal: 0, summary: "app-web-01 CPU 短时升高，触发关注。" },
+  { id: "run-1022", taskId: "t1", schemeVersionId: "t1-v1", startTime: "2025-04-20 08:00:03", endTime: "2025-04-20 08:01:10", duration: "1m 07s", status: "已完成", trigger: "定时", operator: "系统", normal: 8, attention: 0, abnormal: 0, summary: "全部指标正常。" },
+  { id: "run-1021", taskId: "t1", schemeVersionId: "t1-v1", startTime: "2025-04-19 08:00:00", endTime: "2025-04-19 08:01:21", duration: "1m 21s", status: "已完成", trigger: "定时", operator: "系统", normal: 7, attention: 1, abnormal: 0, summary: "app-web-01 CPU 短时升高至 73%。" },
+  { id: "run-1020", taskId: "t1", schemeVersionId: "t1-v1", startTime: "2025-04-18 08:00:02", endTime: "2025-04-18 08:01:05", duration: "1m 03s", status: "失败", trigger: "定时", operator: "系统", normal: 0, attention: 0, abnormal: 0, summary: "Zabbix API 鉴权失败，任务中止。" },
+  { id: "run-2008", taskId: "t2", schemeVersionId: "t2-v1", startTime: "2025-04-22 09:00:01", endTime: "2025-04-22 09:00:42", duration: "41s", status: "已完成", trigger: "定时", operator: "系统", normal: 1, attention: 1, abnormal: 0, summary: "数据库主节点内存、从节点磁盘需要关注。" },
+  { id: "run-2007", taskId: "t2", schemeVersionId: "t2-v1", startTime: "2025-04-21 09:00:00", endTime: "2025-04-21 09:00:38", duration: "38s", status: "已完成", trigger: "定时", operator: "系统", normal: 2, attention: 0, abnormal: 0, summary: "数据库节点全部正常。" },
+  { id: "run-3005", taskId: "t3", schemeVersionId: "t3-v1", startTime: "2025-04-21 07:30:01", endTime: "2025-04-21 07:32:15", duration: "2m 14s", status: "已完成", trigger: "定时", operator: "系统", normal: 5, attention: 3, abnormal: 0, summary: "应用服务响应时间出现波动。" },
+  { id: "run-4099", taskId: "t4", schemeVersionId: "t4-v1", startTime: "2025-04-22 10:30:00", endTime: "—", duration: "进行中", status: "运行中", trigger: "定时", operator: "系统", normal: 7, attention: 0, abnormal: 1, summary: "RabbitMQ 订单队列堆积持续。" },
+  { id: "run-4098", taskId: "t4", schemeVersionId: "t4-v1", startTime: "2025-04-22 10:00:00", endTime: "2025-04-22 10:00:18", duration: "18s", status: "已完成", trigger: "定时", operator: "系统", normal: 7, attention: 0, abnormal: 1, summary: "RabbitMQ 订单队列堆积。" },
+  { id: "run-4097", taskId: "t4", schemeVersionId: "t4-v1", startTime: "2025-04-22 09:30:00", endTime: "2025-04-22 09:30:16", duration: "16s", status: "已完成", trigger: "定时", operator: "系统", normal: 8, attention: 0, abnormal: 0, summary: "中间件巡检项全部正常。" },
+  { id: "run-5001", taskId: "t5", schemeVersionId: "t5-v1", startTime: "2025-04-22 10:12:33", endTime: "2025-04-22 10:13:45", duration: "1m 12s", status: "已完成", trigger: "手动", operator: "张运维", normal: 0, attention: 1, abnormal: 1, summary: "应急核查 app-svc-01 与 mq-01，确认异常持续。" },
 ];
 
 export const alerts: AlertItem[] = [
@@ -497,6 +662,68 @@ export const alerts: AlertItem[] = [
   { id: "a3", host: "db-master-01", metric: "内存使用率", severity: "警告", value: "82%", threshold: ">80% 持续 30 分钟", time: "2025-04-22 08:55", description: "数据库内存使用率上升，关注是否存在长事务或缓存膨胀。", suggestion: "1) 查看 InnoDB Buffer Pool；2) 排查长事务；3) 留意慢查询。" },
   { id: "a4", host: "app-web-02", metric: "CPU 使用率", severity: "提示", value: "71%", threshold: ">70%", time: "2025-04-22 10:02", description: "Web 节点 CPU 上升至关注阈值，暂未达告警线。", suggestion: "持续观察，比对负载均衡分配是否均匀。" },
 ];
+
+export const zabbixHosts: ZabbixHost[] = [
+  { id: "zh-app-web-01", name: "app-web-01", itemCount: 128 },
+  { id: "zh-app-web-02", name: "app-web-02", itemCount: 126 },
+  { id: "zh-app-svc-01", name: "app-svc-01", itemCount: 142 },
+  { id: "zh-app-svc-02", name: "app-svc-02", itemCount: 138 },
+  { id: "zh-db-master-01", name: "db-master-01", itemCount: 186 },
+  { id: "zh-db-slave-01", name: "db-slave-01", itemCount: 182 },
+  { id: "zh-cache-01", name: "cache-01", itemCount: 96 },
+  { id: "zh-mq-01", name: "mq-01", itemCount: 118 },
+  { id: "zh-gateway-01", name: "gateway-01", itemCount: 104 },
+];
+
+const zabbixItemCatalog = [
+  "system.cpu.util",
+  "vm.memory.utilization",
+  "vfs.fs.pused[/]",
+  "vfs.fs.pused[/data]",
+  "icmpping",
+  "net.if.in",
+  "net.if.out",
+  "proc.num",
+  "system.uptime",
+  "kernel.maxfiles",
+  "mysql.ping",
+  "mysql.threads_connected",
+  "mysql.slow_queries",
+  "mysql.max_connections.pused",
+  "mysql.replication.status",
+  "mysql.seconds_behind_master",
+  "net.tcp.service[tcp,,3306]",
+  "net.tcp.service[tcp,,8080]",
+  "net.tcp.service[tcp,,5672]",
+  "web.page.get[health]",
+  "web.page.perf[health]",
+  "proc.num[java]",
+  "proc.num[mw]",
+  "mw.connections",
+  "mw.cluster.status",
+  "mq.queue.messages",
+];
+
+export const zabbixItems: ZabbixItem[] = zabbixHosts.flatMap((host) =>
+  zabbixItemCatalog.map((key, index) => ({
+    id: `${host.id}-item-${index + 1}`,
+    hostId: host.id,
+    key,
+    name: key,
+  })),
+);
+
+function zabbixItemId(hostId: string, key: string) {
+  const item = zabbixItems.find((candidate) => candidate.hostId === hostId && candidate.key === key);
+  if (!item) throw new Error(`Missing mock Zabbix Item: ${hostId} / ${key}`);
+  return item.id;
+}
+
+function inspectionItemId(assetType: AssetType, key: string) {
+  const item = inspectionItems.find((candidate) => candidate.assetType === assetType && candidate.key === key);
+  if (!item) throw new Error(`Missing inspection item: ${assetType} / ${key}`);
+  return item.id;
+}
 
 /* ========== 资产 ========== */
 export const assets: Asset[] = [
@@ -514,46 +741,197 @@ export const assets: Asset[] = [
 export const observationConfigs: Record<string, ObservationConfig> = {
   as1: {
     assetId: "as1",
-    zabbixHost: "app-svc-01",
-    items: [
-      { key: "system.cpu.util", name: "CPU 利用率", warn: 75, crit: 90, window: "10 分钟" },
-      { key: "vm.memory.utilization", name: "内存使用率", warn: 75, crit: 90, window: "10 分钟" },
-      { key: "vfs.fs.pused", name: "磁盘使用率", warn: 75, crit: 90, window: "30 分钟" },
-      { key: "icmpping", name: "Ping 连通性", warn: 100, crit: 0, window: "3 次" },
+    zabbixHostId: "zh-app-svc-01",
+    itemMappings: [
+      { inspectionItemId: inspectionItemId("主机", "cpu"), zabbixItemId: zabbixItemId("zh-app-svc-01", "system.cpu.util") },
+      { inspectionItemId: inspectionItemId("主机", "mem"), zabbixItemId: zabbixItemId("zh-app-svc-01", "vm.memory.utilization") },
+      { inspectionItemId: inspectionItemId("主机", "disk"), zabbixItemId: zabbixItemId("zh-app-svc-01", "vfs.fs.pused[/]") },
+      { inspectionItemId: inspectionItemId("主机", "ping"), zabbixItemId: zabbixItemId("zh-app-svc-01", "icmpping") },
     ],
     logSources: [
-      { source: "es-app-log", path: "/var/log/order-svc/app.log", logType: "应用日志", window: "10 分钟", keywords: ["error", "timeout", "exception"] },
+      { id: "log-as1-app", name: "应用错误日志", logType: "应用日志", filter: "es-app-log / error OR timeout OR exception", enabled: true },
     ],
+  },
+  as2: {
+    assetId: "as2",
+    zabbixHostId: "zh-app-web-01",
+    itemMappings: [
+      { inspectionItemId: inspectionItemId("主机", "cpu"), zabbixItemId: zabbixItemId("zh-app-web-01", "system.cpu.util") },
+      { inspectionItemId: inspectionItemId("主机", "mem"), zabbixItemId: zabbixItemId("zh-app-web-01", "vm.memory.utilization") },
+      { inspectionItemId: inspectionItemId("主机", "disk"), zabbixItemId: zabbixItemId("zh-app-web-01", "vfs.fs.pused[/]") },
+      { inspectionItemId: inspectionItemId("主机", "ping"), zabbixItemId: zabbixItemId("zh-app-web-01", "icmpping") },
+    ],
+    logSources: [{ id: "log-as2-system", name: "系统错误日志", logType: "系统日志", filter: "level=ERROR", enabled: true }],
   },
   as4: {
     assetId: "as4",
-    zabbixHost: "db-master-01",
-    items: [
-      { key: "mysql.status[Threads_connected]", name: "连接数", warn: 200, crit: 400, window: "5 分钟" },
-      { key: "vm.memory.utilization", name: "内存使用率", warn: 75, crit: 90, window: "30 分钟" },
-      { key: "mysql.slow_queries", name: "慢查询数", warn: 20, crit: 50, window: "10 分钟" },
+    zabbixHostId: "zh-db-master-01",
+    itemMappings: [
+      { inspectionItemId: inspectionItemId("数据库", "db_avail"), zabbixItemId: zabbixItemId("zh-db-master-01", "mysql.ping") },
+      { inspectionItemId: inspectionItemId("数据库", "port"), zabbixItemId: zabbixItemId("zh-db-master-01", "net.tcp.service[tcp,,3306]") },
+      { inspectionItemId: inspectionItemId("数据库", "conn"), zabbixItemId: zabbixItemId("zh-db-master-01", "mysql.max_connections.pused") },
+      { inspectionItemId: inspectionItemId("数据库", "slow_sql"), zabbixItemId: zabbixItemId("zh-db-master-01", "mysql.slow_queries") },
+      { inspectionItemId: inspectionItemId("数据库", "data_disk"), zabbixItemId: zabbixItemId("zh-db-master-01", "vfs.fs.pused[/data]") },
     ],
     logSources: [
-      { source: "es-mysql-log", path: "/var/log/mysql/error.log", logType: "数据库日志", window: "15 分钟", keywords: ["ERROR", "deadlock", "Lock wait timeout"] },
+      { id: "log-as4-mysql", name: "数据库错误日志", logType: "错误日志", filter: "es-mysql-log / ERROR OR deadlock OR Lock wait timeout", enabled: true },
     ],
   },
   as3: {
     assetId: "as3",
-    zabbixHost: "mq-01",
-    items: [
-      { key: "icmpping", name: "Ping 连通性", warn: 100, crit: 0, window: "3 次" },
-      { key: "system.cpu.util", name: "CPU 利用率", warn: 75, crit: 90, window: "10 分钟" },
+    zabbixHostId: "zh-mq-01",
+    itemMappings: [
+      { inspectionItemId: inspectionItemId("主机", "ping"), zabbixItemId: zabbixItemId("zh-mq-01", "icmpping") },
+      { inspectionItemId: inspectionItemId("主机", "cpu"), zabbixItemId: zabbixItemId("zh-mq-01", "system.cpu.util") },
     ],
     logSources: [
-      { source: "es-mq-log", path: "/var/log/rabbitmq/rabbit@mq-01.log", logType: "中间件日志", window: "15 分钟", keywords: ["error", "disconnect", "unreachable"] },
+      { id: "log-as3-mq", name: "MQ 主机日志", logType: "系统日志", filter: "es-mq-log / error OR disconnect OR unreachable", enabled: true },
     ],
   },
+  as5: {
+    assetId: "as5",
+    zabbixHostId: "zh-db-slave-01",
+    itemMappings: [
+      { inspectionItemId: inspectionItemId("数据库", "db_avail"), zabbixItemId: zabbixItemId("zh-db-slave-01", "mysql.ping") },
+      { inspectionItemId: inspectionItemId("数据库", "conn"), zabbixItemId: zabbixItemId("zh-db-slave-01", "mysql.max_connections.pused") },
+      { inspectionItemId: inspectionItemId("数据库", "data_disk"), zabbixItemId: zabbixItemId("zh-db-slave-01", "vfs.fs.pused[/data]") },
+    ],
+    logSources: [{ id: "log-as5-mysql", name: "数据库错误日志", logType: "错误日志", filter: "es-mysql-log / ERROR", enabled: true }],
+  },
+  as6: {
+    assetId: "as6",
+    zabbixHostId: "zh-app-svc-01",
+    itemMappings: [
+      { inspectionItemId: inspectionItemId("应用服务", "port"), zabbixItemId: zabbixItemId("zh-app-svc-01", "net.tcp.service[tcp,,8080]") },
+      { inspectionItemId: inspectionItemId("应用服务", "http_status"), zabbixItemId: zabbixItemId("zh-app-svc-01", "web.page.get[health]") },
+      { inspectionItemId: inspectionItemId("应用服务", "http_rt"), zabbixItemId: zabbixItemId("zh-app-svc-01", "web.page.perf[health]") },
+    ],
+    logSources: [{ id: "log-as6-app", name: "应用错误日志", logType: "错误日志", filter: "error OR exception OR timeout", enabled: true }],
+  },
+  as7: {
+    assetId: "as7",
+    zabbixHostId: "zh-gateway-01",
+    itemMappings: [
+      { inspectionItemId: inspectionItemId("应用服务", "port"), zabbixItemId: zabbixItemId("zh-gateway-01", "net.tcp.service[tcp,,8080]") },
+      { inspectionItemId: inspectionItemId("应用服务", "http_status"), zabbixItemId: zabbixItemId("zh-gateway-01", "web.page.get[health]") },
+      { inspectionItemId: inspectionItemId("应用服务", "http_rt"), zabbixItemId: zabbixItemId("zh-gateway-01", "web.page.perf[health]") },
+    ],
+    logSources: [{ id: "log-as7-access", name: "访问日志", logType: "访问日志", filter: "status:500 OR 502 OR 503 OR 504", enabled: true }],
+  },
+  as8: {
+    assetId: "as8",
+    zabbixHostId: "zh-mq-01",
+    itemMappings: [
+      { inspectionItemId: inspectionItemId("中间件", "port"), zabbixItemId: zabbixItemId("zh-mq-01", "net.tcp.service[tcp,,5672]") },
+      { inspectionItemId: inspectionItemId("中间件", "proc"), zabbixItemId: zabbixItemId("zh-mq-01", "proc.num[mw]") },
+      { inspectionItemId: inspectionItemId("中间件", "conn"), zabbixItemId: zabbixItemId("zh-mq-01", "mw.connections") },
+      { inspectionItemId: inspectionItemId("中间件", "queue_lag"), zabbixItemId: zabbixItemId("zh-mq-01", "mq.queue.messages") },
+    ],
+    logSources: [{ id: "log-as8-mq", name: "中间件错误日志", logType: "错误日志", filter: "error OR warning OR timeout", enabled: true }],
+  },
 };
+
+const resultOverrides: Record<string, { value: string; level: RunItemLevel }> = {
+  "run-1024:as1:cpu": { value: "92%", level: "异常" },
+  "run-1024:as2:cpu": { value: "71%", level: "关注" },
+  "run-1024:as3:ping": { value: "超时", level: "异常" },
+  "run-1023:as2:cpu": { value: "76%", level: "关注" },
+  "run-1021:as2:cpu": { value: "73%", level: "关注" },
+  "run-2008:as4:conn": { value: "82%", level: "关注" },
+  "run-2008:as5:data_disk": { value: "68%", level: "关注" },
+  "run-3005:as6:http_rt": { value: "1280ms", level: "关注" },
+  "run-4098:as8:queue_lag": { value: "5600", level: "异常" },
+  "run-4099:as8:queue_lag": { value: "6800", level: "异常" },
+  "run-5001:as1:cpu": { value: "93%", level: "异常" },
+  "run-5001:as3:ping": { value: "超时", level: "异常" },
+};
+
+function normalResultValue(key: string) {
+  const values: Record<string, string> = {
+    cpu: "42%", mem: "58%", disk: "51%", ping: "0.8ms",
+    db_avail: "可用", port: "可达", conn: "42%", slow_sql: "3 次",
+    data_disk: "54%", repl_lag: "1.2s", http_status: "200", http_rt: "320ms",
+    app_err_log: "2 条", access_5xx: "0 条", proc: "存在", queue_lag: "128",
+    err_log: "1 条",
+  };
+  return values[key] ?? "正常";
+}
+
+export function buildInspectionRunSnapshot(run: InspectionRun, sourceTask?: InspectionTask): InspectionRunSnapshot {
+  const task = sourceTask ?? inspectionTasks.find((candidate) => candidate.id === run.taskId);
+  const version = inspectionSchemeVersions.find((candidate) => candidate.id === run.schemeVersionId) ?? (task ? {
+    id: run.schemeVersionId,
+    schemeId: task.id,
+    version: 1,
+    effectiveAt: run.startTime,
+    scope: {
+      appliesTo: task.appliesTo ?? "主机" as AssetType,
+      scopeType: task.scopeType ?? "指定资产" as SchemeScopeType,
+      businessSystems: [...(task.businessSystems ?? [])],
+      environments: [...(task.environments ?? [])],
+      assetIds: [...(task.assetIds ?? [])],
+    },
+    checkItems: (task.checkItems ?? []).map((item) => ({ ...item })),
+  } : undefined);
+  if (!version || !task) throw new Error(`Missing scheme version for run ${run.id}`);
+
+  const assetIds = version.scope.assetIds.length
+    ? version.scope.assetIds
+    : assets.filter((asset) => asset.type === version.scope.appliesTo).map((asset) => asset.id);
+  const results = assetIds.flatMap((assetId) => {
+    const asset = assets.find((candidate) => candidate.id === assetId);
+    if (!asset) return [];
+    const config = observationConfigs[asset.id];
+
+    return version.checkItems.filter((item) => item.enabled).map((item): RunItemResult => {
+      const itemDefinition = inspectionItems.find((candidate) =>
+        candidate.assetType === asset.type && candidate.key === item.key,
+      );
+      const itemId = itemDefinition?.id ?? `${assetTypeCode[asset.type]}-${item.key}`;
+      const mapping = config?.itemMappings.find((candidate) => candidate.inspectionItemId === itemId);
+      const override = resultOverrides[`${run.id}:${asset.id}:${item.key}`];
+      const unavailable = run.status === "失败";
+      const missing = !mapping;
+
+      return {
+        id: `${run.id}:${asset.id}:${item.key}`,
+        runId: run.id,
+        assetId: asset.id,
+        assetName: asset.name,
+        assetType: asset.type,
+        businessSystem: asset.businessSystem,
+        assetIp: asset.ip,
+        inspectionItemId: itemId,
+        inspectionItemName: item.name,
+        zabbixHostId: config?.zabbixHostId,
+        zabbixItemId: mapping?.zabbixItemId,
+        value: unavailable ? "数据源不可用" : missing ? "未配置" : override?.value ?? normalResultValue(item.key),
+        level: unavailable || missing ? "无数据" : override?.level ?? "正常",
+        triggerRule: `关注 ${item.warn} / 异常 ${item.crit}`,
+        collectedAt: run.startTime,
+      };
+    });
+  });
+
+  return {
+    runId: run.id,
+    schemeVersionId: run.schemeVersionId,
+    capturedAt: run.startTime,
+    dataStatus: run.status === "失败"
+      ? "数据源不可用"
+      : results.some((result) => result.level === "无数据") ? "部分缺项" : "完整",
+    results,
+  };
+}
+
+export const inspectionRunSnapshots: Record<string, InspectionRunSnapshot> = Object.fromEntries(
+  inspectionRuns.map((run) => [run.id, buildInspectionRunSnapshot(run)]),
+);
 
 /* ========== 异常/关注记录 ========== */
 export const abnormalRecords: AbnormalRecord[] = [
   {
-    id: "abn-001", taskId: "t1", runId: "run-1024", sourceRunLabel: "主机基础巡检 · #1024",
+    id: "abn-001", taskId: "t1", runId: "run-1024", sourceResultId: "run-1024:as1:cpu", sourceRunLabel: "主机基础巡检 · #1024",
     assetId: "as1", assetName: "app-svc-01", assetType: "主机", businessSystem: "核心交易系统",
     metric: "CPU 使用率", currentLevel: "异常", maxLevel: "异常", value: "92%",
     inspectionHits: [
@@ -566,15 +944,15 @@ export const abnormalRecords: AbnormalRecord[] = [
     firstSeen: "2025-04-22 09:12", lastSeen: "2025-04-22 09:42", duration: "30 分钟", occurrences: 5,
     description: "应用服务节点 CPU 持续 92%，接近处理上限，可能出现请求堆积。",
     evidenceSnapshot: "过去 30 分钟内 CPU 5 次突破 90% 阈值，采样值：91/92/93/92/94。",
-    status: "待处理", analysisStatus: "分析中", analysisTaskId: "an-001",
+    lifecycleStatus: "活跃", status: "处理中", analysisStatus: "分析中", analysisTaskId: "an-001",
     handleLog: [
       { time: "2025-04-22 09:45", actor: "张运维", action: "认领处理" },
       { time: "2025-04-22 09:50", actor: "张运维", action: "发起故障分析", note: "关联 an-001" },
     ],
   },
   {
-    id: "abn-002", taskId: "t4", runId: "run-4098", sourceRunLabel: "MQ 周巡检 · #4098",
-    assetId: "as3", assetName: "mq-01", assetType: "中间件", businessSystem: "核心交易系统",
+    id: "abn-002", taskId: "t1", runId: "run-1024", sourceResultId: "run-1024:as3:ping", sourceRunLabel: "主机基础巡检 · #1024",
+    assetId: "as3", assetName: "mq-01", assetType: "主机", businessSystem: "消息平台",
     metric: "Ping/ICMP", currentLevel: "异常", maxLevel: "异常", value: "超时",
     inspectionHits: [
       { runId: "run-4098", runLabel: "MQ 周巡检 · #4098", time: "2025-04-22 10:15", level: "异常", value: "超时" },
@@ -585,10 +963,10 @@ export const abnormalRecords: AbnormalRecord[] = [
     firstSeen: "2025-04-22 10:15", lastSeen: "2025-04-22 10:18", duration: "3 分钟", occurrences: 3,
     description: "MQ 主机 ICMP 连续 3 次探测失败，疑似链路或主机异常。",
     evidenceSnapshot: "10:15/10:16/10:17 ICMP 请求均超时；同网段其他主机可达。",
-    status: "待处理", analysisStatus: "未分析",
+    lifecycleStatus: "活跃", status: "待处理", analysisStatus: "未分析",
   },
   {
-    id: "abn-003", taskId: "t2", runId: "run-2008", sourceRunLabel: "数据库日常巡检 · #2008",
+    id: "abn-003", taskId: "t2", runId: "run-2008", sourceResultId: "run-2008:as4:conn", sourceRunLabel: "数据库专项巡检 · #2008",
     assetId: "as4", assetName: "db-master-01", assetType: "数据库", businessSystem: "核心交易系统",
     metric: "内存使用率", currentLevel: "关注", maxLevel: "异常", value: "82%",
     inspectionHits: [
@@ -601,11 +979,11 @@ export const abnormalRecords: AbnormalRecord[] = [
     firstSeen: "2025-04-22 03:12", lastSeen: "2025-04-22 09:03", duration: "5 小时 51 分钟", occurrences: 12,
     description: "数据库内存使用率升至 82%，接近关注阈值上限。",
     evidenceSnapshot: "近 6 小时内存呈缓慢上升趋势：72% → 82%。",
-    status: "待处理", analysisStatus: "已分析", analysisTaskId: "an-003",
+    lifecycleStatus: "活跃", status: "待处理", analysisStatus: "分析完成", analysisTaskId: "an-003",
   },
   {
-    id: "abn-004", taskId: "t1", runId: "run-1024", sourceRunLabel: "主机基础巡检 · #1024",
-    assetId: "as2", assetName: "app-web-02", assetType: "主机", businessSystem: "官网门户",
+    id: "abn-004", taskId: "t1", runId: "run-1024", sourceResultId: "run-1024:as2:cpu", sourceRunLabel: "主机基础巡检 · #1024",
+    assetId: "as2", assetName: "app-web-01", assetType: "主机", businessSystem: "核心交易系统",
     metric: "CPU 使用率", currentLevel: "关注", maxLevel: "关注", value: "71%",
     inspectionHits: [
       { runId: "run-1024", runLabel: "主机基础巡检 · #1024", time: "2025-04-22 10:02", level: "关注", value: "71%" },
@@ -615,10 +993,10 @@ export const abnormalRecords: AbnormalRecord[] = [
     firstSeen: "2025-04-22 10:02", lastSeen: "2025-04-22 10:02", duration: "刚刚", occurrences: 1,
     description: "Web 节点 CPU 上升至关注阈值。",
     evidenceSnapshot: "10:00 起 CPU 由 45% 升至 71%，与流量增长基本吻合。",
-    status: "待处理", analysisStatus: "未分析",
+    lifecycleStatus: "活跃", status: "待处理", analysisStatus: "未分析",
   },
   {
-    id: "abn-005", taskId: "t3", runId: "run-3005", sourceRunLabel: "从库周巡检 · #3005",
+    id: "abn-005", taskId: "t2", runId: "run-2008", sourceResultId: "run-2008:as5:data_disk", sourceRunLabel: "数据库专项巡检 · #2008",
     assetId: "as5", assetName: "db-slave-01", assetType: "数据库", businessSystem: "核心交易系统",
     metric: "磁盘使用率", currentLevel: "关注", maxLevel: "关注", value: "68%",
     inspectionHits: [
@@ -631,14 +1009,14 @@ export const abnormalRecords: AbnormalRecord[] = [
     firstSeen: "2025-04-14 07:30", lastSeen: "2025-04-21 07:32", duration: "7 天", occurrences: 7,
     description: "从库磁盘一周内增长 6%，需关注 binlog 保留策略。",
     evidenceSnapshot: "一周磁盘使用率：62% → 68%。",
-    status: "已恢复", analysisStatus: "已分析", analysisTaskId: "an-005",
+    lifecycleStatus: "已恢复", status: "已关闭", analysisStatus: "分析完成", analysisTaskId: "an-005",
     handleLog: [
       { time: "2025-04-21 09:00", actor: "李管理", action: "标记已恢复", note: "已清理过期 binlog" },
     ],
   },
   {
-    id: "abn-006", taskId: "t4", runId: "run-4099", sourceRunLabel: "中间件专项巡检 · #4099",
-    assetId: "as8", assetName: "rabbitmq-cluster", assetType: "中间件", businessSystem: "核心交易系统",
+    id: "abn-006", taskId: "t4", runId: "run-4099", sourceResultId: "run-4099:as8:queue_lag", sourceRunLabel: "中间件专项巡检 · #4099",
+    assetId: "as8", assetName: "RabbitMQ 主集群", assetType: "中间件", businessSystem: "消息平台",
     metric: "消息堆积", currentLevel: "异常", maxLevel: "异常", value: "6800",
     inspectionHits: [
       { runId: "run-4097", runLabel: "中间件专项巡检 · #4097", time: "2025-04-22 08:00", level: "关注", value: "3200" },
@@ -649,25 +1027,25 @@ export const abnormalRecords: AbnormalRecord[] = [
     firstSeen: "2025-04-22 08:00", lastSeen: "2025-04-22 08:20", duration: "20 分钟", occurrences: 2,
     description: "订单队列堆积超过 5000，消费端处理速度不足。",
     evidenceSnapshot: "队列 order.q 堆积由 1200 上涨至 6800。",
-    status: "待处理", analysisStatus: "分析失败", analysisTaskId: "an-006",
+    lifecycleStatus: "活跃", status: "待处理", analysisStatus: "分析失败", analysisTaskId: "an-006",
   },
 ];
 
 /* ========== 故障分析任务 ========== */
 export const analysisTasks: AnalysisTask[] = [
   {
-    id: "an-001", recordId: "abn-001",
+    id: "an-001", recordId: "abn-001", assetId: "as1",
     assetName: "app-svc-01", assetType: "主机", businessSystem: "核心交易系统",
     metric: "CPU 使用率", currentLevel: "异常", maxLevel: "异常",
-    source: "异常记录",
+    source: "异常记录", version: 1, dataWindow: "2025-04-22 09:12 ~ 09:42", traceId: "trace-an-001", reportId: "r3",
     createdBy: "张运维", createdAt: "2025-04-22 09:50",
-    completedAt: undefined,
-    status: "分析中",
+    completedAt: "2025-04-22 10:00",
+    status: "分析完成",
     progress: [
       { label: "已读取巡检指标", done: true },
       { label: "已获取相关日志", done: true },
       { label: "已检索知识库", done: true },
-      { label: "正在生成原因分析和处理建议", done: false },
+      { label: "已生成原因分析和处理建议", done: true },
     ],
     metricTrend: {
       metric: "CPU 使用率 (app-svc-01)",
@@ -718,12 +1096,12 @@ export const analysisTasks: AnalysisTask[] = [
     ],
   },
   {
-    id: "an-003", recordId: "abn-003",
+    id: "an-003", recordId: "abn-003", assetId: "as4",
     assetName: "db-master-01", assetType: "数据库", businessSystem: "核心交易系统",
     metric: "内存使用率", currentLevel: "关注", maxLevel: "异常",
-    source: "异常记录",
+    source: "异常记录", version: 1, dataWindow: "2025-04-22 03:12 ~ 09:03", traceId: "trace-an-003",
     createdBy: "李管理", createdAt: "2025-04-22 09:20", completedAt: "2025-04-22 09:26",
-    status: "已分析",
+    status: "分析完成",
     metricTrend: {
       metric: "内存使用率 (db-master-01)",
       baseline: "过去 7 天均值 68%",
@@ -761,12 +1139,12 @@ export const analysisTasks: AnalysisTask[] = [
     ],
   },
   {
-    id: "an-005", recordId: "abn-005",
+    id: "an-005", recordId: "abn-005", assetId: "as5",
     assetName: "db-slave-01", assetType: "数据库", businessSystem: "核心交易系统",
     metric: "磁盘使用率", currentLevel: "关注", maxLevel: "关注",
-    source: "异常记录",
+    source: "异常记录", version: 1, dataWindow: "2025-04-14 07:30 ~ 2025-04-21 07:32", traceId: "trace-an-005",
     createdBy: "李管理", createdAt: "2025-04-21 08:00", completedAt: "2025-04-21 08:05",
-    status: "已分析",
+    status: "分析完成",
     metricTrend: {
       metric: "磁盘使用率 (db-slave-01)",
       baseline: "上周均值 62%",
@@ -788,10 +1166,10 @@ export const analysisTasks: AnalysisTask[] = [
     ],
   },
   {
-    id: "an-006", recordId: "abn-006",
-    assetName: "rabbitmq-cluster", assetType: "中间件", businessSystem: "核心交易系统",
+    id: "an-006", recordId: "abn-006", assetId: "as8",
+    assetName: "RabbitMQ 主集群", assetType: "中间件", businessSystem: "消息平台",
     metric: "消息堆积", currentLevel: "异常", maxLevel: "异常",
-    source: "异常记录",
+    source: "异常记录", version: 1, dataWindow: "2025-04-22 08:00 ~ 08:20", traceId: "trace-an-006",
     createdBy: "王巡检", createdAt: "2025-04-22 08:25", completedAt: "2025-04-22 08:27",
     status: "分析失败",
     failReason: "调用 Zabbix 数据接口超时，未能获取指标趋势数据。",
@@ -826,7 +1204,7 @@ export const reports: ReportItem[] = [
     generatedAt: "2025-04-22 08:15",
     author: "系统自动",
     summary: "全量 8 台主机完成巡检，覆盖率 100%，2 项异常 2 项关注，主要集中在 app-svc-01 与 mq-01。",
-    status: "已归档",
+    status: "已生成", source: { type: "巡检执行", id: "run-1024" }, traceId: "trace-report-r1",
     quality: {
       completionRate: 98.5, coverageRate: 100, totalTasks: 5, finishedTasks: 5,
       totalHosts: 8, coveredHosts: 8, abnormal: 2, attention: 2, normal: 4, failedRuns: 0,
@@ -841,7 +1219,7 @@ export const reports: ReportItem[] = [
     generatedAt: "2025-04-21 09:00",
     author: "系统自动",
     summary: "本周共执行巡检任务 35 次，完成率 97.1%，覆盖全部 8 台主机，识别异常 5 项、关注 9 项。",
-    status: "已归档",
+    status: "已生成", source: { type: "巡检执行", id: "run-1023" }, traceId: "trace-report-r2",
     quality: {
       completionRate: 97.1, coverageRate: 100, totalTasks: 35, finishedTasks: 34,
       totalHosts: 8, coveredHosts: 8, abnormal: 5, attention: 9, normal: 21, failedRuns: 1,
@@ -851,14 +1229,14 @@ export const reports: ReportItem[] = [
     id: "r3",
     title: "app-svc-01 CPU 持续高位 故障分析报告",
     category: "故障分析报告",
-    frequency: "日报",
     period: "2025-04-22",
     generatedAt: "2025-04-22 10:05",
     author: "系统自动",
     summary: "针对 abn-001 异常记录形成故障分析报告，综合指标趋势、应用日志与知识库引用，形成 3 项原因假设与 4 项处置建议。",
-    status: "已归档",
+    status: "已生成", source: { type: "故障分析任务", id: "an-001" }, traceId: "trace-an-001",
     analysis: {
       recordId: "abn-001",
+      analysisTaskId: "an-001",
       asset: "app-svc-01 (核心交易 · 订单服务)",
       severity: "严重",
       metricTrendSummary: "过去 30 分钟 CPU 由 55% 升至 92%，与请求量增长呈正相关；对比 7 天基线偏离 +47%。",
@@ -902,7 +1280,7 @@ export const reports: ReportItem[] = [
     generatedAt: "2025-04-22 09:00",
     author: "系统自动",
     summary: "本月共承接问答 326 次，命中知识库 287 次，命中率 88%；新增 4 篇 SOP、更新 6 篇文档；识别 3 个知识盲区。",
-    status: "已归档",
+    status: "已生成", source: { type: "知识服务统计", id: "knowledge-2025-04" }, traceId: "trace-report-r4",
     knowledge: {
       totalQA: 326, citedKnowledge: 287, citationRate: 88, newDocs: 4, updatedDocs: 6,
       topQuestions: [
@@ -955,25 +1333,25 @@ export const users: UserItem[] = [
 ];
 
 export const auditLogs: AuditLog[] = [
-  { id: "l1", time: "2025-04-22 10:31", user: "张运维", action: "生成报告", target: "app-svc-01 故障分析报告", result: "成功", ip: "10.10.1.22", category: "用户操作" },
+  { id: "l1", time: "2025-04-22 10:31", user: "张运维", actorId: "u2", action: "生成报告", actionCode: "REPORT_GENERATE", target: "app-svc-01 故障分析报告", entityType: "Report", entityId: "r3", traceId: "trace-an-001", result: "成功", ip: "10.10.1.22", category: "用户操作" },
   { id: "l2", time: "2025-04-22 10:18", user: "系统", action: "触发巡检", target: "网络连通性巡检", result: "成功", ip: "—", category: "任务执行" },
   { id: "l3", time: "2025-04-22 09:50", user: "李管理", action: "登录", target: "平台门户", result: "成功", ip: "10.10.1.5", category: "用户操作" },
-  { id: "l4", time: "2025-04-22 09:45", user: "系统", action: "Agent 调用", target: "故障分析 Agent · abn-001", result: "成功", ip: "—", category: "Agent 调用" },
+  { id: "l4", time: "2025-04-22 09:45", user: "系统", action: "Agent 调用", actionCode: "AGENT_ANALYSIS", target: "故障分析 Agent · abn-001", entityType: "AnalysisTask", entityId: "an-001", traceId: "trace-an-001", result: "成功", ip: "—", category: "Agent 调用" },
   { id: "l5", time: "2025-04-22 09:12", user: "张运维", action: "更新知识条目", target: "服务重启前后确认事项 FAQ", result: "成功", ip: "10.10.1.22", category: "用户操作" },
-  { id: "l6", time: "2025-04-22 09:00", user: "系统", action: "数据接入", target: "Zabbix API · 拉取 32 项指标", result: "成功", ip: "—", category: "数据来源" },
-  { id: "l7", time: "2025-04-22 08:55", user: "系统", action: "数据接入", target: "ES · order-svc/app.log 检索", result: "成功", ip: "—", category: "数据来源" },
+  { id: "l6", time: "2025-04-22 09:00", user: "系统", action: "数据接入", target: "Zabbix API · 拉取 32 项指标", entityType: "AnalysisTask", entityId: "an-001", traceId: "trace-an-001", result: "成功", ip: "—", category: "数据来源" },
+  { id: "l7", time: "2025-04-22 08:55", user: "系统", action: "数据接入", target: "ES · order-svc/app.log 检索", entityType: "AnalysisTask", entityId: "an-001", traceId: "trace-an-001", result: "成功", ip: "—", category: "数据来源" },
   { id: "l8", time: "2025-04-22 08:00", user: "系统", action: "触发巡检", target: "全量主机日常巡检", result: "成功", ip: "—", category: "任务执行" },
   { id: "l9", time: "2025-04-21 17:45", user: "赵主管", action: "查看报告", target: "巡检周报", result: "成功", ip: "10.10.1.40", category: "用户操作" },
   { id: "l10", time: "2025-04-21 14:02", user: "刘外包", action: "登录", target: "平台门户", result: "失败", ip: "10.10.9.99", category: "用户操作" },
 ];
 
 export const agentRuns: AgentRun[] = [
-  { id: "ag1", agent: "指挥调度 Agent", task: "故障分析 abn-001 分派", status: "成功", duration: "120ms", startTime: "2025-04-22 09:50:02", input: "record=abn-001", output: "分派 3 个子 Agent" },
-  { id: "ag2", agent: "数据查询 Agent", task: "Zabbix 指标回溯", status: "成功", duration: "480ms", startTime: "2025-04-22 09:50:04", input: "app-svc-01 cpu 30m", output: "24 个采样点" },
-  { id: "ag3", agent: "日志辅助 Agent", task: "ES 关键字检索", status: "成功", duration: "780ms", startTime: "2025-04-22 09:50:05", input: "order-svc keywords=error,timeout", output: "3 条命中" },
-  { id: "ag4", agent: "知识问答 Agent", task: "SOP 匹配", status: "成功", duration: "620ms", startTime: "2025-04-22 09:50:07", input: "CPU 高负载", output: "2 条引用" },
-  { id: "ag5", agent: "故障分析 Agent", task: "综合分析输出", status: "成功", duration: "1.4s", startTime: "2025-04-22 09:50:09", input: "abn-001 综合上下文", output: "3 假设 + 4 建议" },
-  { id: "ag6", agent: "报告生成 Agent", task: "故障分析报告 r3", status: "成功", duration: "2.1s", startTime: "2025-04-22 10:04:22", input: "an-001", output: "已归档 r3" },
+  { id: "ag1", agent: "指挥调度 Agent", task: "故障分析 abn-001 分派", status: "成功", duration: "120ms", startTime: "2025-04-22 09:50:02", input: "record=abn-001", output: "分派 3 个子 Agent", traceId: "trace-an-001", entityType: "AnalysisTask", entityId: "an-001" },
+  { id: "ag2", agent: "数据查询 Agent", task: "Zabbix 指标回溯", status: "成功", duration: "480ms", startTime: "2025-04-22 09:50:04", input: "app-svc-01 cpu 30m", output: "24 个采样点", traceId: "trace-an-001", entityType: "AnalysisTask", entityId: "an-001" },
+  { id: "ag3", agent: "日志辅助 Agent", task: "ES 关键字检索", status: "成功", duration: "780ms", startTime: "2025-04-22 09:50:05", input: "order-svc keywords=error,timeout", output: "3 条命中", traceId: "trace-an-001", entityType: "AnalysisTask", entityId: "an-001" },
+  { id: "ag4", agent: "知识问答 Agent", task: "SOP 匹配", status: "成功", duration: "620ms", startTime: "2025-04-22 09:50:07", input: "CPU 高负载", output: "2 条引用", traceId: "trace-an-001", entityType: "AnalysisTask", entityId: "an-001" },
+  { id: "ag5", agent: "故障分析 Agent", task: "综合分析输出", status: "成功", duration: "1.4s", startTime: "2025-04-22 09:50:09", input: "abn-001 综合上下文", output: "3 假设 + 4 建议", traceId: "trace-an-001", entityType: "AnalysisTask", entityId: "an-001" },
+  { id: "ag6", agent: "报告生成 Agent", task: "故障分析报告 r3", status: "成功", duration: "2.1s", startTime: "2025-04-22 10:04:22", input: "an-001", output: "已生成 r3", traceId: "trace-an-001", entityType: "Report", entityId: "r3" },
 ];
 
 /* ========== 图表数据（保留） ========== */

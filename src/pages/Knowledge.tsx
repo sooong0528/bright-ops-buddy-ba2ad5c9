@@ -8,8 +8,6 @@ import {
   Eye,
   FileEdit,
   RefreshCw,
-  MoreHorizontal,
-  Trash2,
   Power,
   PowerOff,
   FileText,
@@ -19,18 +17,19 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { StatusBadge, statusTone } from "@/components/StatusBadge";
 import { knowledge as knowledgeSeed } from "@/lib/mockData";
 import { toast } from "@/hooks/use-toast";
 import { StatCard, StatCardGrid } from "@/components/StatCard";
+import { TableActions } from "@/components/TableActions";
 
 type ParseStatus = "已完成" | "解析中" | "解析失败";
 
@@ -252,7 +251,11 @@ export default function Knowledge() {
           {view === "card" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {list.map((k) => (
-                <div key={k.id} className="panel p-4 hover:border-primary/40 hover:shadow-elev-md transition group flex flex-col">
+                <div
+                  key={k.id}
+                  className="panel p-4 hover:border-primary/40 hover:shadow-elev-md transition group flex flex-col cursor-pointer"
+                  onClick={() => setDetailDoc(k)}
+                >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2">
                       <StatusBadge tone="info">{k.category}</StatusBadge>
@@ -260,7 +263,7 @@ export default function Knowledge() {
                     </div>
                     <StatusBadge tone={k.enabled ? "success" : "muted"}>{k.enabled ? "启用" : "停用"}</StatusBadge>
                   </div>
-                  <h4 className="text-sm font-semibold leading-snug mb-1.5 group-hover:text-primary transition cursor-pointer" onClick={() => setDetailDoc(k)}>
+                  <h4 className="text-sm font-semibold leading-snug mb-1.5 group-hover:text-primary transition">
                     {k.title}
                   </h4>
                   <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{k.excerpt}</p>
@@ -276,65 +279,60 @@ export default function Knowledge() {
                   </div>
                   <div className="mt-auto pt-3 border-t flex items-center justify-between text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{k.updatedAt}</span>
-                    <div className="flex items-center gap-0.5">
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setDetailDoc(k)}>查看详情</Button>
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setEditDoc(k)}>编辑信息</Button>
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => reparse(k)}>重新解析</Button>
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => toggleEnabled(k.id)}>{k.enabled ? "停用" : "启用"}</Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="h-3.5 w-3.5" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="text-destructive" onClick={() => setDeleteDoc(k)}>
-                            <Trash2 className="h-3.5 w-3.5 mr-2" />删除
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                    <TableActions moreTrigger="icon" actions={[
+                      { label: "编辑信息", onClick: () => setEditDoc(k) },
+                      { label: "重新解析", onClick: () => reparse(k) },
+                      { label: k.enabled ? "停用" : "启用", onClick: () => toggleEnabled(k.id) },
+                      { label: "删除", danger: true, onClick: () => setDeleteDoc(k) },
+                    ]} />
                   </div>
                 </div>
               ))}
             </div>
           ) : (
             <div className="panel overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-xs text-muted-foreground">
-                  <tr>
-                    <th className="text-left px-3 py-2 font-medium">文档名称</th>
-                    <th className="text-left px-3 py-2 font-medium">分类</th>
-                    <th className="text-left px-3 py-2 font-medium">适用资产</th>
-                    <th className="text-left px-3 py-2 font-medium">解析</th>
-                    <th className="text-left px-3 py-2 font-medium">状态</th>
-                    <th className="text-left px-3 py-2 font-medium">更新时间</th>
-                    <th className="text-right px-3 py-2 font-medium">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.map((k, idx) => (
-                    <tr key={k.id} className={idx % 2 ? "bg-muted/20" : ""}>
-                      <td className="px-3 py-2">
-                        <div className="font-medium truncate max-w-[240px]" title={k.title}>{k.title}</div>
-                        <div className="text-xs text-muted-foreground truncate max-w-[240px]">{k.fileName}</div>
-                      </td>
-                      <td className="px-3 py-2"><StatusBadge tone="info">{k.category}</StatusBadge></td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{k.appliesTo.join("、")}</td>
-                      <td className="px-3 py-2"><ParseBadge status={k.parseStatus} /></td>
-                      <td className="px-3 py-2"><StatusBadge tone={k.enabled ? "success" : "muted"}>{k.enabled ? "启用" : "停用"}</StatusBadge></td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">{k.updatedAt}</td>
-                      <td className="px-3 py-2 text-right">
-                        <div className="inline-flex items-center gap-0.5">
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setDetailDoc(k)}>查看</Button>
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setEditDoc(k)}>编辑信息</Button>
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => reparse(k)}>重新解析</Button>
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => toggleEnabled(k.id)}>{k.enabled ? "停用" : "启用"}</Button>
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive" onClick={() => setDeleteDoc(k)}>删除</Button>
-                        </div>
-                      </td>
-                    </tr>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>文档名称</TableHead>
+                    <TableHead>分类</TableHead>
+                    <TableHead>适用资产</TableHead>
+                    <TableHead>解析状态</TableHead>
+                    <TableHead>状态</TableHead>
+                    <TableHead>更新时间</TableHead>
+                    <TableHead className="text-right">操作</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {list.map((k) => (
+                    <TableRow key={k.id} className="cursor-pointer hover:bg-secondary/40" onClick={() => setDetailDoc(k)}>
+                      <TableCell>
+                        <button
+                          type="button"
+                          className="max-w-[260px] truncate text-left font-medium transition-colors hover:text-primary focus-visible:outline-none focus-visible:text-primary"
+                          title={k.fileName}
+                          onClick={(event) => { event.stopPropagation(); setDetailDoc(k); }}
+                        >
+                          {k.fileName}
+                        </button>
+                      </TableCell>
+                      <TableCell><StatusBadge tone="info">{k.category}</StatusBadge></TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{k.appliesTo.join("、") || "—"}</TableCell>
+                      <TableCell><ParseBadge status={k.parseStatus} /></TableCell>
+                      <TableCell><StatusBadge tone={k.enabled ? "success" : "muted"}>{k.enabled ? "启用" : "停用"}</StatusBadge></TableCell>
+                      <TableCell className="text-sm text-muted-foreground tabular-nums">{k.updatedAt}</TableCell>
+                      <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                        <TableActions actions={[
+                          { label: "编辑信息", onClick: () => setEditDoc(k) },
+                          { label: "重新解析", onClick: () => reparse(k) },
+                          { label: k.enabled ? "停用" : "启用", onClick: () => toggleEnabled(k.id) },
+                          { label: "删除", danger: true, onClick: () => setDeleteDoc(k) },
+                        ]} />
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
 

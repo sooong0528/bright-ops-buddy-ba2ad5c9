@@ -27,14 +27,28 @@ import {
   reports,
   abnormalRecords,
   agentRuns,
+  assets,
+  inspectionRuns,
 } from "@/lib/mockData";
 import { StatCard, StatCardGrid } from "@/components/StatCard";
 
+const latestCompletedRun = inspectionRuns.find((run) => run.status === "已完成");
+const validResultCount = latestCompletedRun
+  ? latestCompletedRun.normal + latestCompletedRun.attention + latestCompletedRun.abnormal
+  : 0;
+const normalRate = validResultCount && latestCompletedRun
+  ? Math.round(latestCompletedRun.normal / validResultCount * 100)
+  : 0;
+const activeAbnormalCount = abnormalRecords.filter((record) => record.lifecycleStatus === "活跃").length;
+const agentSuccessRate = agentRuns.length
+  ? Math.round(agentRuns.filter((run) => run.status === "成功").length / agentRuns.length * 100)
+  : 0;
+
 const stats = [
-  { label: "纳管资产", value: "18", unit: "个", delta: "+2", icon: Server, tone: "info" as const },
-  { label: "正常率", value: "75", unit: "%", delta: "-12.5%", icon: CheckCircle2, tone: "success" as const },
-  { label: "异常记录", value: "5", unit: "项", delta: "+2", icon: TrendingUp, tone: "warning" as const },
-  { label: "今日 Agent 调用", value: "126", unit: "次", delta: "+18", icon: Bot, tone: "info" as const },
+  { label: "纳管资产", value: String(assets.filter((asset) => asset.status === "在用").length), unit: "个", description: "当前在用资产", icon: Server, tone: "info" as const },
+  { label: "最近巡检正常率", value: String(normalRate), unit: "%", description: latestCompletedRun?.id ?? "暂无执行", icon: CheckCircle2, tone: "success" as const },
+  { label: "活跃异常记录", value: String(activeAbnormalCount), unit: "项", description: "含关注与异常", icon: TrendingUp, tone: "warning" as const },
+  { label: "Agent 调用", value: String(agentRuns.length), unit: "次", description: "当前样例数据", icon: Bot, tone: "info" as const },
 ];
 
 export default function Dashboard() {
@@ -76,7 +90,7 @@ export default function Dashboard() {
             title={s.label}
             value={s.value}
             unit={s.unit}
-            description={`较昨日 ${s.delta}`}
+            description={s.description}
             icon={s.icon}
             tone={s.tone}
           />
@@ -85,8 +99,8 @@ export default function Dashboard() {
 
       {/* 异常记录 & Agent 工作情况 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="panel p-5 lg:col-span-2">
-          <div className="flex items-center justify-between mb-3">
+        <div className="panel p-5 lg:col-span-2 lg:h-[500px] 2xl:h-[520px] flex min-h-0 flex-col overflow-hidden">
+          <div className="flex shrink-0 items-center justify-between mb-3">
             <div>
               <h3 className="text-base font-semibold flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-warning" /> 异常记录
@@ -97,7 +111,7 @@ export default function Dashboard() {
               <Link to="/inspection/abnormal">更多 <ArrowUpRight className="ml-1 h-3 w-3" /></Link>
             </Button>
           </div>
-          <div className="space-y-2">
+          <div className="grid flex-1 min-h-0 auto-rows-fr gap-2 overflow-hidden">
             {abnormalRecords.slice(0, 5).map((r) => (
               <Link key={r.id} to={`/analysis?record=${r.id}`}
                 className="flex items-center gap-3 rounded-lg border bg-card/50 px-3 py-2.5 hover:border-primary/40 hover:bg-primary-soft/30 transition group">
@@ -109,8 +123,8 @@ export default function Dashboard() {
                   </div>
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{r.description}</p>
                 </div>
-                <StatusBadge tone={r.status === "已恢复" ? "success" : r.status === "已忽略" ? "muted" : "warning"}>
-                  {r.status}
+                <StatusBadge tone={r.lifecycleStatus === "已恢复" ? "success" : r.status === "已忽略" ? "muted" : "warning"}>
+                  {r.lifecycleStatus === "已恢复" ? "已恢复" : r.status}
                 </StatusBadge>
                 <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
               </Link>
@@ -118,20 +132,22 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="panel p-5">
-          <div className="flex items-center justify-between mb-3">
+        <div className="panel p-5 flex min-h-0 flex-col overflow-hidden lg:h-[500px] 2xl:h-[520px]">
+          <div className="flex shrink-0 items-center justify-between mb-3">
             <h3 className="text-base font-semibold flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" /> Agent 工作情况
             </h3>
-            <StatusBadge tone="success" dot>在线</StatusBadge>
+            <Button asChild variant="ghost" size="sm" className="text-sm">
+              <Link to="/audit">调用日志 <ArrowUpRight className="ml-1 h-4 w-4" /></Link>
+            </Button>
           </div>
-          <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="grid shrink-0 grid-cols-3 gap-2 mb-3">
             <div className="rounded-md bg-muted/40 py-2 text-center">
-              <div className="text-lg font-semibold text-success tabular-nums">98%</div>
+              <div className="text-lg font-semibold text-success tabular-nums">{agentSuccessRate}%</div>
               <div className="text-xs text-muted-foreground">成功率</div>
             </div>
             <div className="rounded-md bg-muted/40 py-2 text-center">
-              <div className="text-lg font-semibold text-primary tabular-nums">126</div>
+              <div className="text-lg font-semibold text-primary tabular-nums">{agentRuns.length}</div>
               <div className="text-xs text-muted-foreground">今日调用</div>
             </div>
             <div className="rounded-md bg-muted/40 py-2 text-center">
@@ -139,9 +155,9 @@ export default function Dashboard() {
               <div className="text-xs text-muted-foreground">平均耗时</div>
             </div>
           </div>
-          <div className="space-y-1.5 max-h-56 overflow-y-auto">
+          <div className="grid flex-1 auto-rows-fr gap-1.5 min-h-0">
             {agentRuns.slice(0, 5).map((a) => (
-              <div key={a.id} className="rounded-md border bg-card/50 px-2.5 py-2">
+              <div key={a.id} className="flex flex-col justify-center rounded-md border bg-card/50 px-2.5 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium truncate">{a.agent}</span>
                   <StatusBadge tone={a.status === "成功" ? "success" : "destructive"}>{a.status}</StatusBadge>
@@ -154,9 +170,6 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-          <Button asChild variant="ghost" size="sm" className="w-full mt-2 text-xs">
-            <Link to="/audit">查看 Agent 调用日志 <ArrowUpRight className="ml-1 h-3 w-3" /></Link>
-          </Button>
         </div>
       </div>
 
@@ -199,13 +212,17 @@ export default function Dashboard() {
           </div>
           <div className="space-y-2">
             {reports.slice(0, 5).map((r) => (
-              <Link key={r.id} to="/reports"
+              <Link key={r.id} to={`/reports?report=${r.id}`}
                 className="block rounded-lg border bg-card/50 px-3 py-2.5 hover:border-primary/40 hover:bg-primary-soft/30 transition">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium truncate">{r.title}</span>
-                  <StatusBadge tone="info">{r.frequency}</StatusBadge>
+                  <StatusBadge tone={statusTone(r.status)}>{r.status}</StatusBadge>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1 tabular-nums">{r.generatedAt}</p>
+                <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <StatusBadge tone="info">{r.category}</StatusBadge>
+                  {r.frequency && <StatusBadge tone="muted">{r.frequency}</StatusBadge>}
+                  <span className="ml-auto tabular-nums">{r.generatedAt}</span>
+                </div>
               </Link>
             ))}
           </div>

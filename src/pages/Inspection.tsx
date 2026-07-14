@@ -7,7 +7,6 @@ import {
   Search,
   ListChecks,
   Clock,
-  Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -151,13 +150,12 @@ export default function Inspection() {
               <TableHead>耗时</TableHead>
               <TableHead>状态</TableHead>
               <TableHead className="text-right">结果</TableHead>
-              <TableHead className="text-right w-24">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredRuns.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
                   没有匹配的巡检记录
                 </TableCell>
               </TableRow>
@@ -167,7 +165,13 @@ export default function Inspection() {
                 return (
                   <TableRow key={r.id} className="hover:bg-secondary/40 cursor-pointer" onClick={() => openRun(r.id)}>
                     <TableCell>
-                      <span className="font-medium tabular-nums">#{r.id.replace("run-", "")}</span>
+                      <button
+                        type="button"
+                        className="font-medium tabular-nums text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:text-primary"
+                        onClick={(event) => { event.stopPropagation(); openRun(r.id); }}
+                      >
+                        #{r.id.replace("run-", "")}
+                      </button>
                       <div className="text-xs text-muted-foreground mt-0.5">{r.trigger} · {r.operator}</div>
                     </TableCell>
                     <TableCell className="text-sm">{task?.name ?? "—"}</TableCell>
@@ -182,12 +186,6 @@ export default function Inspection() {
                         <span className="text-warning">关 {r.attention}</span>
                         <span className="text-destructive">异 {r.abnormal}</span>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
-                        onClick={(e) => { e.stopPropagation(); openRun(r.id); }}>
-                        <Eye className="h-3 w-3 mr-1" />查看
-                      </Button>
                     </TableCell>
                   </TableRow>
                 );

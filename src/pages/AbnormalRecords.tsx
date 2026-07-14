@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   RefreshCw, Search, Clock, Eye, Stethoscope, MessageSquareQuote,
-  MoreHorizontal, Ban, RotateCcw, CheckCircle2, FileText, Loader2, XCircle, AlertTriangle,
+  Ban, RotateCcw, CheckCircle2, FileText, Loader2, XCircle, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,13 +13,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StatCard, StatCardGrid } from "@/components/StatCard";
+import { TableActions, type TableAction } from "@/components/TableActions";
 import { toast } from "@/hooks/use-toast";
 import {
   abnormalRecords, type AbnormalRecord,
@@ -29,8 +27,10 @@ import {
 function handleStatusTone(s: RecordHandleStatus) {
   switch (s) {
     case "待处理": return "warning" as const;
-    case "已恢复": return "success" as const;
+    case "处理中": return "info" as const;
+    case "已确认": return "success" as const;
     case "已忽略": return "muted" as const;
+    case "已关闭": return "success" as const;
   }
 }
 
@@ -38,7 +38,7 @@ function analysisStatusTone(s: RecordAnalysisStatus) {
   switch (s) {
     case "未分析": return "muted" as const;
     case "分析中": return "info" as const;
-    case "已分析": return "success" as const;
+    case "分析完成": return "success" as const;
     case "分析失败": return "destructive" as const;
   }
 }
@@ -50,8 +50,18 @@ export default function AbnormalRecords() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [analysisFilter, setAnalysisFilter] = useState<string>("all");
   const [activeRecordId, setActiveRecordId] = useState<string | null>(null);
+  const [records, setRecords] = useState<AbnormalRecord[]>(() => structuredClone(abnormalRecords));
+
+  function updateRecord(id: string, patch: Partial<AbnormalRecord>, action: string) {
+    setRecords((current) => current.map((record) => record.id === id ? {
+      ...record,
+      ...patch,
+      handleLog: [...(record.handleLog ?? []), { time: "刚刚", actor: "当前用户", action }],
+    } : record));
+  }
 
   function goStartAnalysis(r: AbnormalRecord) {
+    updateRecord(r.id, { analysisStatus: "分析中", status: "处理中" }, "发起故障分析");
     toast({ title: "已发起故障分析", description: `${r.assetName} · ${r.metric}` });
     navigate(`/analysis`);
   }
@@ -68,15 +78,17 @@ export default function AbnormalRecords() {
       sourceType: r.currentLevel === "关注" ? "关注项" : "巡检异常",
       sourceId: r.id,
       title: `${r.assetName} · ${r.metric}`,
+      displayTime: r.lastSeen,
       snapshot: r.evidenceSnapshot || r.description,
     }));
     navigate("/assistant");
   }
 
   const filteredRecords = useMemo(() => {
-    return abnormalRecords.filter((r) => {
+    return records.filter((r) => {
       if (levelFilter !== "all" && r.currentLevel !== levelFilter && r.maxLevel !== levelFilter) return false;
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (statusFilter === "已恢复" && r.lifecycleStatus !== "已恢复") return false;
+      if (statusFilter !== "all" && statusFilter !== "已恢复" && r.status !== statusFilter) return false;
       if (analysisFilter !== "all" && r.analysisStatus !== analysisFilter) return false;
       if (keyword) {
         const k = keyword.toLowerCase();
@@ -88,16 +100,18 @@ export default function AbnormalRecords() {
       }
       return true;
     });
-  }, [levelFilter, statusFilter, analysisFilter, keyword]);
+  }, [levelFilter, statusFilter, analysisFilter, keyword, records]);
 
   const stats = useMemo(() => ({
-    pending: abnormalRecords.filter((r) => r.status === "待处理").length,
-    abnormal: abnormalRecords.filter((r) => r.currentLevel === "异常").length,
-    attention: abnormalRecords.filter((r) => r.currentLevel === "关注").length,
-    recovered: abnormalRecords.filter((r) => r.status === "已恢复").length,
-  }), []);
+    pending: records.filter((r) => r.status === "待处理" || r.status === "处理中").length,
+    abnormal: records.filter((r) => r.lifecycleStatus === "活跃" && r.currentLevel === "异常").length,
+    attention: records.filter((r) => r.lifecycleStatus === "活跃" && r.currentLevel === "关注").length,
+    recovered: records.filter((r) => r.lifecycleStatus === "已恢复").length,
+    analyzed: records.filter((r) => r.analysisStatus === "分析完成").length,
+    ignored: records.filter((r) => r.status === "已忽略").length,
+  }), [records]);
 
-  const activeRecord = activeRecordId ? abnormalRecords.find((r) => r.id === activeRecordId) ?? null : null;
+  const activeRecord = activeRecordId ? records.find((r) => r.id === activeRecordId) ?? null : null;
 
   return (
     <div className="space-y-6">
@@ -132,8 +146,10 @@ export default function AbnormalRecords() {
             <SelectContent>
               <SelectItem value="all">全部处理状态</SelectItem>
               <SelectItem value="待处理">待处理</SelectItem>
+              <SelectItem value="处理中">处理中</SelectItem>
               <SelectItem value="已恢复">已恢复</SelectItem>
               <SelectItem value="已忽略">已忽略</SelectItem>
+              <SelectItem value="已关闭">已关闭</SelectItem>
             </SelectContent>
           </Select>
           <Select value={analysisFilter} onValueChange={setAnalysisFilter}>
@@ -142,7 +158,7 @@ export default function AbnormalRecords() {
               <SelectItem value="all">全部分析状态</SelectItem>
               <SelectItem value="未分析">未分析</SelectItem>
               <SelectItem value="分析中">分析中</SelectItem>
-              <SelectItem value="已分析">已分析</SelectItem>
+              <SelectItem value="分析完成">分析完成</SelectItem>
               <SelectItem value="分析失败">分析失败</SelectItem>
             </SelectContent>
           </Select>
@@ -177,12 +193,18 @@ export default function AbnormalRecords() {
               filteredRecords.map((r) => (
                 <TableRow key={r.id} className="hover:bg-secondary/40 cursor-pointer" onClick={() => setActiveRecordId(r.id)}>
                   <TableCell>
-                    <StatusBadge tone={r.currentLevel === "异常" ? "destructive" : "warning"}>
-                      {r.currentLevel}
+                    <StatusBadge tone={r.lifecycleStatus === "已恢复" ? "success" : r.currentLevel === "异常" ? "destructive" : "warning"}>
+                      {r.lifecycleStatus === "已恢复" ? "已恢复" : r.currentLevel}
                     </StatusBadge>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm font-medium">{r.assetName}</div>
+                    <button
+                      type="button"
+                      className="text-sm font-medium text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:text-primary"
+                      onClick={(event) => { event.stopPropagation(); setActiveRecordId(r.id); }}
+                    >
+                      {r.assetName}
+                    </button>
                     <div className="text-xs text-muted-foreground">{r.metric}</div>
                   </TableCell>
                   <TableCell className="text-sm tabular-nums font-medium">{r.value}</TableCell>
@@ -205,62 +227,34 @@ export default function AbnormalRecords() {
                     <StatusBadge tone={analysisStatusTone(r.analysisStatus)}>{r.analysisStatus}</StatusBadge>
                   </TableCell>
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="inline-flex items-center gap-1">
-                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
-                        onClick={() => setActiveRecordId(r.id)}>
-                        <Eye className="h-3 w-3 mr-1" />查看
-                      </Button>
-                      {r.analysisStatus === "未分析" && (
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                          onClick={() => goStartAnalysis(r)}>
-                          <Stethoscope className="h-3 w-3 mr-1" />故障分析
-                        </Button>
-                      )}
-                      {r.analysisStatus === "分析中" && (
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                          onClick={() => goViewAnalysis(r)}>
-                          <Loader2 className="h-3 w-3 mr-1" />查看进度
-                        </Button>
-                      )}
-                      {r.analysisStatus === "已分析" && (
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                          onClick={() => goViewAnalysis(r)}>
-                          <FileText className="h-3 w-3 mr-1" />查看报告
-                        </Button>
-                      )}
-                      {r.analysisStatus === "分析失败" && (
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                          onClick={() => goRetryAnalysis(r)}>
-                          <RotateCcw className="h-3 w-3 mr-1" />重新分析
-                        </Button>
-                      )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
-                            <MoreHorizontal className="h-3.5 w-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          {r.analysisStatus === "已分析" && (
-                            <DropdownMenuItem onClick={() => goRetryAnalysis(r)}>
-                              <RotateCcw className="h-3.5 w-3.5 mr-2" />重新分析
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem onClick={() => askAbout(r)}>
-                            <MessageSquareQuote className="h-3.5 w-3.5 mr-2" />追问
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => toast({ title: "已标记恢复", description: `${r.assetName} · ${r.metric}` })}>
-                            <RotateCcw className="h-3.5 w-3.5 mr-2" />标记已恢复
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => toast({ title: "已忽略", description: `${r.assetName} · ${r.metric}` })}>
-                            <Ban className="h-3.5 w-3.5 mr-2" />忽略
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                    <TableActions actions={([
+                      r.analysisStatus === "未分析"
+                        ? { label: "故障分析", onClick: () => goStartAnalysis(r) }
+                        : r.analysisStatus === "分析中"
+                          ? { label: "分析进度", onClick: () => goViewAnalysis(r) }
+                          : r.analysisStatus === "分析完成"
+                            ? { label: "分析结果", onClick: () => goViewAnalysis(r) }
+                            : { label: "重新分析", onClick: () => goRetryAnalysis(r) },
+                      ...(r.analysisStatus === "分析完成" ? [{ label: "重新分析", onClick: () => goRetryAnalysis(r) }] : []),
+                      { label: "追问", onClick: () => askAbout(r) },
+                      ...(r.lifecycleStatus === "活跃" ? [
+                        {
+                          label: "标记恢复",
+                          onClick: () => {
+                            updateRecord(r.id, { lifecycleStatus: "已恢复", status: "已关闭" }, "标记已恢复");
+                            toast({ title: "已标记恢复", description: `${r.assetName} · ${r.metric}` });
+                          },
+                        },
+                        {
+                          label: "忽略",
+                          danger: true,
+                          onClick: () => {
+                            updateRecord(r.id, { status: "已忽略" }, "忽略记录");
+                            toast({ title: "已忽略", description: `${r.assetName} · ${r.metric}` });
+                          },
+                        },
+                      ] : []),
+                    ] satisfies TableAction[])} />
                   </TableCell>
                 </TableRow>
               ))
@@ -270,7 +264,7 @@ export default function AbnormalRecords() {
 
         <div className="flex items-center justify-between px-5 py-3 border-t bg-muted/20 text-xs text-muted-foreground">
           <span>共 {filteredRecords.length} 条异常/关注记录</span>
-          <span>待处理 {stats.pending} · 已分析 {stats.analyzed} · 已恢复 {stats.recovered} · 已忽略 {stats.ignored}</span>
+          <span>待处理 {stats.pending} · 分析完成 {stats.analyzed} · 已恢复 {stats.recovered} · 已忽略 {stats.ignored}</span>
         </div>
       </div>
 
@@ -281,13 +275,15 @@ export default function AbnormalRecords() {
         onViewAnalysis={(r) => { setActiveRecordId(null); goViewAnalysis(r); }}
         onRetryAnalysis={(r) => { setActiveRecordId(null); goRetryAnalysis(r); }}
         onAsk={(r) => { setActiveRecordId(null); askAbout(r); }}
+        onRecover={(r) => updateRecord(r.id, { lifecycleStatus: "已恢复", status: "已关闭" }, "标记已恢复")}
+        onIgnore={(r) => updateRecord(r.id, { status: "已忽略" }, "忽略记录")}
       />
     </div>
   );
 }
 
 function RecordDetailSheet({
-  record, onClose, onStartAnalysis, onViewAnalysis, onRetryAnalysis, onAsk,
+  record, onClose, onStartAnalysis, onViewAnalysis, onRetryAnalysis, onAsk, onRecover, onIgnore,
 }: {
   record: AbnormalRecord | null;
   onClose: () => void;
@@ -295,6 +291,8 @@ function RecordDetailSheet({
   onViewAnalysis: (r: AbnormalRecord) => void;
   onRetryAnalysis: (r: AbnormalRecord) => void;
   onAsk: (r: AbnormalRecord) => void;
+  onRecover: (r: AbnormalRecord) => void;
+  onIgnore: (r: AbnormalRecord) => void;
 }) {
   return (
     <Sheet open={!!record} onOpenChange={(v) => !v && onClose()}>
@@ -303,8 +301,8 @@ function RecordDetailSheet({
           <>
             <SheetHeader className="space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <StatusBadge tone={record.currentLevel === "异常" ? "destructive" : "warning"}>
-                  当前 {record.currentLevel}
+                <StatusBadge tone={record.lifecycleStatus === "已恢复" ? "success" : record.currentLevel === "异常" ? "destructive" : "warning"}>
+                  当前 {record.lifecycleStatus === "已恢复" ? "已恢复" : record.currentLevel}
                 </StatusBadge>
                 <StatusBadge tone={record.maxLevel === "异常" ? "destructive" : "warning"}>
                   最高 {record.maxLevel}
@@ -378,13 +376,13 @@ function RecordDetailSheet({
               )}
               {record.analysisStatus === "分析中" && (
                 <Button variant="default" onClick={() => onViewAnalysis(record)}>
-                  <Loader2 className="h-4 w-4 mr-2" />查看进度
+                  <Loader2 className="h-4 w-4 mr-2" />分析进度
                 </Button>
               )}
-              {record.analysisStatus === "已分析" && (
+              {record.analysisStatus === "分析完成" && (
                 <>
                   <Button variant="default" onClick={() => onViewAnalysis(record)}>
-                    <FileText className="h-4 w-4 mr-2" />查看报告
+                    <FileText className="h-4 w-4 mr-2" />分析结果
                   </Button>
                   <Button variant="outline" onClick={() => onRetryAnalysis(record)}>
                     <RotateCcw className="h-4 w-4 mr-2" />重新分析
@@ -400,11 +398,11 @@ function RecordDetailSheet({
                 <MessageSquareQuote className="h-4 w-4 mr-2" />追问
               </Button>
               <Button variant="ghost" className="ml-auto"
-                onClick={() => { toast({ title: "已标记恢复", description: `${record.assetName} · ${record.metric}` }); onClose(); }}>
-                <RotateCcw className="h-4 w-4 mr-2" />标记已恢复
+                onClick={() => { onRecover(record); toast({ title: "已标记恢复", description: `${record.assetName} · ${record.metric}` }); onClose(); }}>
+                <RotateCcw className="h-4 w-4 mr-2" />标记恢复
               </Button>
               <Button variant="ghost"
-                onClick={() => { toast({ title: "已忽略", description: `${record.assetName} · ${record.metric}` }); onClose(); }}>
+                onClick={() => { onIgnore(record); toast({ title: "已忽略", description: `${record.assetName} · ${record.metric}` }); onClose(); }}>
                 <Ban className="h-4 w-4 mr-2" />忽略
               </Button>
             </div>

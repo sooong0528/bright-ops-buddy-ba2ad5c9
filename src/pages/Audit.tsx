@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Search, Download, ScrollText, Filter, ShieldCheck, UserRound, ListChecks, Bot, XCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search, ScrollText, ShieldCheck, UserRound, ListChecks, Bot, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -28,7 +27,7 @@ export default function Audit() {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<Cat>("全部");
   const list = auditLogs.filter((l) => {
-    const matchQ = q === "" || l.user.includes(q) || l.action.includes(q) || l.target.includes(q);
+    const matchQ = q === "" || l.user.includes(q) || l.action.includes(q) || l.target.includes(q) || l.traceId?.includes(q);
     const matchC = cat === "全部" || l.category === cat;
     return matchQ && matchC;
   });
@@ -61,10 +60,8 @@ export default function Audit() {
           <div className="flex gap-2 flex-wrap">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="搜索用户 / 操作 / 对象" value={q} onChange={(e) => setQ(e.target.value)} className="w-64 pl-8 h-9" />
+              <Input placeholder="搜索用户 / 操作 / 对象 / Trace" value={q} onChange={(e) => setQ(e.target.value)} className="w-72 pl-8 h-9" />
             </div>
-            <Button variant="outline" size="sm"><Filter className="h-4 w-4 mr-1" />高级筛选</Button>
-            <Button variant="outline" size="sm"><Download className="h-4 w-4 mr-1" />导出</Button>
           </div>
         </div>
 
@@ -100,7 +97,15 @@ export default function Audit() {
                   <span className={`text-sm font-medium ${l.user === "系统" ? "text-info" : ""}`}>{l.user}</span>
                 </TableCell>
                 <TableCell className="text-sm">{l.action}</TableCell>
-                <TableCell className="text-sm">{l.target}</TableCell>
+                <TableCell className="text-sm">
+                  <div>{l.target}</div>
+                  {(l.entityId || l.traceId) && (
+                    <div className="text-sm text-muted-foreground font-mono">
+                      {l.entityType && l.entityId ? `${l.entityType} · ${l.entityId}` : ""}
+                      {l.traceId ? ` · ${l.traceId}` : ""}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell><StatusBadge tone={statusTone(l.result)} dot={l.result === "失败"}>{l.result}</StatusBadge></TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{l.ip}</TableCell>
               </TableRow>

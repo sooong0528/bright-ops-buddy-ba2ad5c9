@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { assets, defaultCheckItemsByAssetType, users } from "@/lib/mockData";
+import { MemoryRouter } from "react-router-dom";
+import { assets, defaultCheckItemsByAssetType, reports, users } from "@/lib/mockData";
 import Assets from "@/pages/Assets";
+import Assistant from "@/pages/Assistant";
+import Reports from "@/pages/Reports";
 import App from "@/App";
 
 describe("configuration refinement", () => {
@@ -66,5 +69,48 @@ describe("configuration refinement", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "更换" })[0]);
 
     expect(screen.getByRole("combobox", { name: /选择 Zabbix Item/ })).toBeInTheDocument();
+  });
+
+  it("filters reports by the important marker without archive actions", () => {
+    render(React.createElement(MemoryRouter, null, React.createElement(Reports)));
+
+    fireEvent.click(screen.getByRole("switch", { name: "仅看重要" }));
+
+    expect(screen.getByText(reports[0].title)).toBeInTheDocument();
+    expect(screen.queryByText(reports[1].title)).not.toBeInTheDocument();
+    expect(screen.queryByText("移入归档")).not.toBeInTheDocument();
+  });
+
+  it("shows report source details in a context follow-up without exposing its id", () => {
+    sessionStorage.setItem("assistant.context", JSON.stringify({
+      sourceType: "报告",
+      sourceId: "r3",
+      title: "app-svc-01 CPU 持续高位 故障分析报告",
+      displayTime: "2025-04-22 10:05",
+      snapshot: "故障分析报告",
+    }));
+
+    render(React.createElement(MemoryRouter, null, React.createElement(Assistant)));
+
+    expect(screen.getByText("app-svc-01 CPU 持续高位 故障分析报告")).toBeInTheDocument();
+    expect(screen.getByText(/生成时间：2025-04-22 10:05/)).toBeInTheDocument();
+    expect(screen.queryByText("r3")).not.toBeInTheDocument();
+  });
+
+  it("shows abnormal source details with its latest occurrence time", () => {
+    sessionStorage.setItem("assistant.context", JSON.stringify({
+      sourceType: "巡检异常",
+      sourceId: "abn-001",
+      title: "app-svc-01 · CPU 使用率",
+      displayTime: "2025-04-22 09:42",
+      snapshot: "CPU 使用率持续超过异常阈值",
+    }));
+
+    render(React.createElement(MemoryRouter, null, React.createElement(Assistant)));
+
+    expect(screen.getByText("app-svc-01 · CPU 使用率")).toBeInTheDocument();
+    expect(screen.getByText(/最近发生：2025-04-22 09:42/)).toBeInTheDocument();
+    expect(screen.getByText("CPU 使用率持续超过异常阈值")).toBeInTheDocument();
+    expect(screen.queryByText("abn-001")).not.toBeInTheDocument();
   });
 });

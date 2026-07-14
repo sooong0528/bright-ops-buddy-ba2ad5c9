@@ -1,11 +1,25 @@
 import { useState, useMemo } from "react";
-import { Server, Database, Layers, Package, Search, Plus, Settings2, Activity, FileText, Pencil, Trash2, RefreshCw, CheckCircle2, AlertCircle, Check, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { Server, Database, Layers, Package, Search, Plus, Settings2, Activity, FileText, Pencil, Trash2, CheckCircle2, AlertCircle, Check, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { assets as initialAssets, observationConfigs, users, type Asset, type AssetType, type Environment } from "@/lib/mockData";
+import {
+  assets as initialAssets,
+  inspectionItems,
+  observationConfigs,
+  registerCustomInspectionItem,
+  users,
+  zabbixHosts,
+  zabbixItems,
+  type Asset,
+  type AssetType,
+  type Environment,
+  type InspectionItemMapping,
+  type LogSourceEntry,
+  type ObservationConfig,
+} from "@/lib/mockData";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
@@ -20,6 +34,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { StatCard, StatCardGrid } from "@/components/StatCard";
+import { TableActions } from "@/components/TableActions";
 
 const typeMeta: Record<AssetType, { icon: any; color: string; bg: string }> = {
   主机: { icon: Server, color: "text-primary", bg: "bg-primary-soft" },
@@ -40,45 +55,7 @@ function ownerNames(ownerIds: string[]) {
 }
 
 /* ========= 观测配置可选池 ========= */
-const zabbixHostPool: { name: string; itemCount: number }[] = [
-  { name: "app-web-01", itemCount: 128 },
-  { name: "app-web-02", itemCount: 126 },
-  { name: "app-svc-01", itemCount: 142 },
-  { name: "app-svc-02", itemCount: 138 },
-  { name: "db-master-01", itemCount: 186 },
-  { name: "db-slave-01", itemCount: 182 },
-  { name: "cache-01", itemCount: 96 },
-  { name: "mq-01", itemCount: 118 },
-  { name: "gateway-01", itemCount: 104 },
-];
-
-const zabbixItemKeys = [
-  "system.cpu.util",
-  "vm.memory.utilization",
-  "vfs.fs.pused[/]",
-  "vfs.fs.pused[/data]",
-  "icmpping",
-  "net.if.in",
-  "net.if.out",
-  "proc.num",
-  "system.uptime",
-  "kernel.maxfiles",
-  "mysql.ping",
-  "mysql.threads_connected",
-  "mysql.slow_queries",
-  "mysql.max_connections.pused",
-  "mysql.replication.status",
-  "mysql.seconds_behind_master",
-  "net.tcp.service[tcp,,3306]",
-  "net.tcp.service[tcp,,8080]",
-  "net.tcp.service[tcp,,5672]",
-  "web.page.get[health]",
-  "web.page.perf[health]",
-  "proc.num[java]",
-  "proc.num[mw]",
-  "mw.connections",
-  "mw.cluster.status",
-];
+const zabbixHostPool = zabbixHosts;
 
 type RecommendedMetric = { name: string; description: string; suggestedItem: string };
 
@@ -119,67 +96,43 @@ const recommendedMetricsByType: Record<AssetType, RecommendedMetric[]> = {
   ],
 };
 
-// 一个资产始终只对应 1 个主 Host；若同一应用部署在多台机器，应分别建为独立资产
-const isSinglePrimaryHost = (_t: AssetType) => true;
-
-type MetricMapping = { metric: string; matchedItem?: string };
-type LogSourceEntry = { name: string; logType: string; filter: string; enabled: boolean };
-
-type EditableConfig = {
-  hostMappings: Record<string, MetricMapping[]>;   // host -> per-metric matched item
-  logSources: LogSourceEntry[];                    // 资产级日志源
-};
+type MetricMapping = InspectionItemMapping;
+type EditableConfig = ObservationConfig;
 
 const logTypePresets = ["系统日志", "安全日志", "运行日志", "应用日志", "错误日志", "访问日志"];
 
 // 每类资产的默认日志源（示例）
 const recommendedLogsByType: Record<AssetType, LogSourceEntry[]> = {
   主机: [
-    { name: "系统错误日志", logType: "系统日志", filter: "level=ERROR", enabled: true },
-    { name: "OOM / kernel 异常", logType: "系统日志", filter: "oom OR kernel panic OR disk error", enabled: true },
+    { id: "log-host-system", name: "系统错误日志", logType: "系统日志", filter: "level=ERROR", enabled: true },
+    { id: "log-host-kernel", name: "OOM / kernel 异常", logType: "系统日志", filter: "oom OR kernel panic OR disk error", enabled: true },
   ],
   数据库: [
-    { name: "数据库错误日志", logType: "错误日志", filter: "error OR crash OR aborted OR denied", enabled: true },
-    { name: "慢查询日志", logType: "运行日志", filter: "Query_time OR Lock_time", enabled: true },
+    { id: "log-db-error", name: "数据库错误日志", logType: "错误日志", filter: "error OR crash OR aborted OR denied", enabled: true },
+    { id: "log-db-slow", name: "慢查询日志", logType: "运行日志", filter: "Query_time OR Lock_time", enabled: true },
   ],
   应用服务: [
-    { name: "应用错误日志", logType: "错误日志", filter: "error OR exception OR timeout OR failed", enabled: true },
-    { name: "访问日志", logType: "访问日志", filter: "status:500 OR 502 OR 503 OR 504", enabled: true },
+    { id: "log-app-error", name: "应用错误日志", logType: "错误日志", filter: "error OR exception OR timeout OR failed", enabled: true },
+    { id: "log-app-access", name: "访问日志", logType: "访问日志", filter: "status:500 OR 502 OR 503 OR 504", enabled: true },
   ],
   中间件: [
-    { name: "中间件错误日志", logType: "错误日志", filter: "error OR warning OR timeout OR connection refused", enabled: true },
+    { id: "log-mw-error", name: "中间件错误日志", logType: "错误日志", filter: "error OR warning OR timeout OR connection refused", enabled: true },
   ],
 };
-
-function seedHostMapping(type: AssetType): MetricMapping[] {
-  return recommendedMetricsByType[type].map((m) => ({ metric: m.name, matchedItem: m.suggestedItem }));
-}
 
 function initConfigs(): Record<string, EditableConfig> {
   const init: Record<string, EditableConfig> = {};
   Object.values(observationConfigs).forEach((c) => {
     const asset = initialAssets.find((a) => a.id === c.assetId);
     if (!asset) return;
-    init[c.assetId] = {
-      hostMappings: { [c.zabbixHost]: seedHostMapping(asset.type) },
-      logSources: recommendedLogsByType[asset.type].map((l) => ({ ...l })),
-    };
+    init[c.assetId] = structuredClone(c);
   });
   return init;
 }
 
-function metricStatus(m: MetricMapping): "已匹配" | "未匹配" {
-  return m.matchedItem ? "已匹配" : "未匹配";
-}
-
 function statusOf(cfg?: EditableConfig): Asset["observationStatus"] {
   if (!cfg) return "未配置";
-  const hosts = Object.keys(cfg.hostMappings);
-  const matchedMetricCount = hosts.reduce(
-    (n, h) => n + (cfg.hostMappings[h]?.filter((m) => m.matchedItem).length ?? 0),
-    0,
-  );
-  const hasItems = hosts.length > 0 && matchedMetricCount > 0;
+  const hasItems = Boolean(cfg.zabbixHostId) && cfg.itemMappings.some((mapping) => mapping.zabbixItemId);
   const hasLogs = (cfg.logSources?.filter((l) => l.enabled).length ?? 0) > 0;
   if (hasItems && hasLogs) return "已配置";
   if (hasItems || hasLogs) return "部分配置";
@@ -266,11 +219,9 @@ export default function Assets() {
   const handleDelete = () => {
     if (!deleteId) return;
     const target = assets.find((a) => a.id === deleteId);
-    setAssets((prev) => prev.filter((a) => a.id !== deleteId));
-    setConfigs((prev) => { const n = { ...prev }; delete n[deleteId]; return n; });
-    if (openId === deleteId) setOpenId(null);
+    setAssets((prev) => prev.map((asset) => asset.id === deleteId ? { ...asset, status: "停用" } : asset));
     setDeleteId(null);
-    toast({ title: "已删除", description: target ? `${target.name} 已从资产列表移除` : undefined });
+    toast({ title: "资产已停用", description: target ? `${target.name} 的历史关联记录已保留` : undefined });
   };
 
   const saveObsConfig = (assetId: string, cfg: EditableConfig) => {
@@ -350,15 +301,11 @@ export default function Assets() {
                   <TableCell className="text-sm text-muted-foreground">{ownerNames(a.ownerIds)}</TableCell>
                   <TableCell><StatusBadge tone={obsTone} dot>{obsStatus}</StatusBadge></TableCell>
                   <TableCell className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                    <Button size="sm" variant="ghost" onClick={() => setObsEditId(a.id)}>
-                      <Settings2 className="h-4 w-4 mr-1" />观测配置
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => openEdit(a)}>
-                      <Pencil className="h-4 w-4 mr-1" />编辑
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(a.id)}>
-                      <Trash2 className="h-4 w-4 mr-1" />删除
-                    </Button>
+                    <TableActions actions={[
+                      { label: "编辑资产", onClick: () => openEdit(a) },
+                      { label: "观测配置", onClick: () => setObsEditId(a.id) },
+                      { label: "停用", danger: true, onClick: () => setDeleteId(a.id) },
+                    ]} />
                   </TableCell>
                 </TableRow>
               );
@@ -487,7 +434,7 @@ export default function Assets() {
           {obsEditAsset && (
             <ObservationEditor
               asset={obsEditAsset}
-              value={configs[obsEditAsset.id] ?? { hostMappings: {}, logSources: [] }}
+              value={configs[obsEditAsset.id] ?? { assetId: obsEditAsset.id, zabbixHostId: "", itemMappings: [], logSources: [] }}
               onCancel={() => setObsEditId(null)}
               onSave={(cfg) => saveObsConfig(obsEditAsset.id, cfg)}
             />
@@ -496,18 +443,18 @@ export default function Assets() {
       </Sheet>
 
 
-      {/* 删除确认 */}
+      {/* 停用确认 */}
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除该资产？</AlertDialogTitle>
+            <AlertDialogTitle>确认停用该资产？</AlertDialogTitle>
             <AlertDialogDescription>
-              删除后将同时移除其在列表中的展示，此操作不可撤销。
+              停用后不再纳入新的巡检范围，已有巡检、异常、分析和报告关联继续保留。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">确认删除</AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete}>确认停用</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -578,7 +525,7 @@ function ItemPicker({
   onChange,
 }: {
   value?: string;
-  items: string[];
+  items: { id: string; label: string }[];
   label: string;
   onChange: (item?: string) => void;
 }) {
@@ -596,7 +543,7 @@ function ItemPicker({
           className="h-8 w-full justify-between px-2 font-mono text-xs font-normal"
         >
           <span className={value ? "truncate" : "truncate text-muted-foreground"}>
-            {value ?? "选择 Zabbix Item"}
+            {items.find((item) => item.id === value)?.label ?? "选择 Zabbix Item"}
           </span>
           <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </Button>
@@ -620,15 +567,15 @@ function ItemPicker({
               )}
               {items.map((item) => (
                 <CommandItem
-                  key={item}
-                  value={item}
+                  key={item.id}
+                  value={item.label}
                   onSelect={() => {
-                    onChange(item);
+                    onChange(item.id);
                     setOpen(false);
                   }}
                 >
-                  <Check className={`mr-2 h-4 w-4 ${item === value ? "opacity-100" : "opacity-0"}`} />
-                  <span className="font-mono text-xs">{item}</span>
+                  <Check className={`mr-2 h-4 w-4 ${item.id === value ? "opacity-100" : "opacity-0"}`} />
+                  <span className="font-mono text-xs">{item.label}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -639,257 +586,192 @@ function ItemPicker({
   );
 }
 
-/* ============ 观测配置编辑器（左 Host 列表；右 推荐巡检项映射 + 资产级日志源） ============ */
-function ObservationEditor({
-  asset, value, onCancel, onSave,
-}: {
+/* ============ 观测配置编辑器：一个资产、一个 Host、一个巡检项对应一个 Item ============ */
+function ObservationEditor({ asset, value, onCancel, onSave }: {
   asset: Asset;
   value: EditableConfig;
   onCancel: () => void;
   onSave: (cfg: EditableConfig) => void;
 }) {
-  const singleMode = isSinglePrimaryHost(asset.type);
-  const recommended = recommendedMetricsByType[asset.type];
-
-  const [hostMappings, setHostMappings] = useState<Record<string, MetricMapping[]>>(value.hostMappings ?? {});
+  const [hostId, setHostId] = useState(value.zabbixHostId ?? "");
+  const [itemMappings, setItemMappings] = useState<MetricMapping[]>(value.itemMappings ?? []);
   const [logSources, setLogSources] = useState<LogSourceEntry[]>(
-    value.logSources && value.logSources.length ? value.logSources : recommendedLogsByType[asset.type].map((l) => ({ ...l })),
+    value.logSources?.length ? value.logSources : recommendedLogsByType[asset.type].map((log) => ({ ...log })),
   );
-  const [activeHost, setActiveHost] = useState<string | null>(() => Object.keys(value.hostMappings ?? {})[0] ?? null);
   const [hostKeyword, setHostKeyword] = useState("");
-  const [editingMetric, setEditingMetric] = useState<string | null>(null);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
-  const [customMetric, setCustomMetric] = useState({ name: "", item: "" });
+  const [customMetric, setCustomMetric] = useState({ name: "", zabbixItemId: "" });
 
-  const selectedHosts = Object.keys(hostMappings);
-  const filteredHosts = useMemo(
-    () => zabbixHostPool.filter((h) => !hostKeyword || h.name.includes(hostKeyword)),
-    [hostKeyword],
-  );
+  const definitions = inspectionItems.filter((item) => item.assetType === asset.type);
+  const selectedHost = zabbixHosts.find((host) => host.id === hostId);
+  const hostItems = zabbixItems.filter((item) => item.hostId === hostId);
+  const filteredHosts = zabbixHostPool.filter((host) => !hostKeyword || host.name.includes(hostKeyword));
 
-  const matchedCountOfHost = (h: string) =>
-    (hostMappings[h] ?? []).filter((m) => m.matchedItem).length;
-
-  const toggleHost = (h: string) => {
-    setHostMappings((prev) => {
-      const has = !!prev[h];
-      if (singleMode) {
-        // 主机：单选主 Host
-        if (has) return {};
-        return { [h]: seedHostMapping(asset.type) };
-      }
-      const next = { ...prev };
-      if (has) delete next[h];
-      else next[h] = seedHostMapping(asset.type);
-      return next;
-    });
-    setActiveHost((cur) => {
-      if (singleMode) return h;
-      if (hostMappings[h] && cur === h) {
-        const remain = Object.keys(hostMappings).filter((x) => x !== h);
-        return remain[0] ?? null;
-      }
-      return cur ?? h;
-    });
+  const selectHost = (nextHostId: string) => {
+    setHostId(nextHostId);
+    setItemMappings(definitions.filter((item) => !item.optional).map((definition) => {
+      const recommended = recommendedMetricsByType[asset.type].find((item) => item.name === definition.name);
+      const zabbixItem = zabbixItems.find((item) => item.hostId === nextHostId && item.key === recommended?.suggestedItem);
+      return { inspectionItemId: definition.id, zabbixItemId: zabbixItem?.id ?? "" };
+    }));
+    setEditingItemId(null);
   };
 
-  const updateMapping = (host: string, metric: string, item?: string) => {
-    const mappings = hostMappings[host] ?? [];
-    if (item && mappings.some((mapping) => mapping.metric !== metric && mapping.matchedItem === item)) {
+  const updateMapping = (inspectionItemId: string, nextZabbixItemId?: string) => {
+    if (nextZabbixItemId && itemMappings.some((mapping) =>
+      mapping.inspectionItemId !== inspectionItemId && mapping.zabbixItemId === nextZabbixItemId,
+    )) {
       toast({ title: "无法重复绑定", description: "该 Item 已关联其他巡检项", variant: "destructive" });
       return;
     }
-    setHostMappings((prev) => ({
-      ...prev,
-      [host]: (prev[host] ?? []).map((m) => (m.metric === metric ? { ...m, matchedItem: item } : m)),
-    }));
+    setItemMappings((current) => current.map((mapping) =>
+      mapping.inspectionItemId === inspectionItemId
+        ? { ...mapping, zabbixItemId: nextZabbixItemId ?? "" }
+        : mapping,
+    ));
   };
 
   const addCustomMetric = () => {
-    if (!activeHost || !customMetric.name.trim() || !customMetric.item.trim()) {
+    if (!hostId || !customMetric.name.trim() || !customMetric.zabbixItemId) {
       toast({ title: "请填写完整", description: "巡检项名称和 Zabbix Item 均为必填", variant: "destructive" });
       return;
     }
-    const item = customMetric.item.trim();
-    if (item && (hostMappings[activeHost] ?? []).some((mapping) => mapping.matchedItem === item)) {
+    if (itemMappings.some((mapping) => mapping.zabbixItemId === customMetric.zabbixItemId)) {
       toast({ title: "无法重复绑定", description: "该 Item 已关联其他巡检项", variant: "destructive" });
       return;
     }
-    setHostMappings((prev) => ({
-      ...prev,
-      [activeHost]: [
-        ...(prev[activeHost] ?? []),
-        { metric: customMetric.name.trim(), matchedItem: item || undefined },
-      ],
-    }));
-    setCustomMetric({ name: "", item: "" });
+    const definition = registerCustomInspectionItem({
+      key: `custom_${Date.now()}`,
+      name: customMetric.name.trim(),
+      assetType: asset.type,
+      description: "资产观测配置中创建的自定义巡检项",
+      defaultWarn: "—",
+      defaultCrit: "—",
+    });
+    setItemMappings((current) => [...current, {
+      inspectionItemId: definition.id,
+      zabbixItemId: customMetric.zabbixItemId,
+    }]);
+    setCustomMetric({ name: "", zabbixItemId: "" });
     setCustomOpen(false);
+    toast({ title: "自定义巡检项已加入统一目录" });
   };
 
-  const addLogSource = () => {
-    setLogSources((prev) => [
-      ...prev,
-      { name: "新日志源", logType: "运行日志", filter: "", enabled: true },
-    ]);
-  };
-  const updateLog = (idx: number, patch: Partial<LogSourceEntry>) => {
-    setLogSources((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
-  };
-  const removeLog = (idx: number) => setLogSources((prev) => prev.filter((_, i) => i !== idx));
+  const addLogSource = () => setLogSources((current) => [...current, {
+    id: `log-${Date.now()}`,
+    name: "新日志源",
+    logType: "运行日志",
+    filter: "",
+    enabled: true,
+  }]);
+  const updateLog = (index: number, patch: Partial<LogSourceEntry>) =>
+    setLogSources((current) => current.map((log, currentIndex) => currentIndex === index ? { ...log, ...patch } : log));
+  const removeLog = (index: number) => setLogSources((current) => current.filter((_, currentIndex) => currentIndex !== index));
 
-  const activeMappings = activeHost ? hostMappings[activeHost] ?? [] : [];
-  const matchedMetrics = activeMappings.filter((m) => m.matchedItem).length;
-  const customSelectableItems = zabbixItemKeys.filter(
-    (item) => !activeMappings.some((mapping) => mapping.matchedItem === item),
-  );
-
-  const primaryHost = selectedHosts[0] ?? null;
-  const primaryHostMeta = primaryHost ? zabbixHostPool.find((h) => h.name === primaryHost) : null;
+  const matchedCount = itemMappings.filter((mapping) => mapping.zabbixItemId).length;
 
   return (
     <div className="flex flex-col h-full">
       <SheetHeader className="px-6 pt-6 pb-3 border-b">
         <SheetTitle className="text-base">编辑观测配置 · {asset.name}</SheetTitle>
-        <SheetDescription className="text-xs font-normal">
-          本页用于维护当前资产的数据来源。<span className="text-foreground">关联 Zabbix Host</span> 与 <span className="text-foreground">日志源配置</span> 是两类平级的数据来源，日志源不隶属于任何 Host。
-          一个资产只能关联 1 个主 Host；若同一应用部署在多台机器，请分别建为独立资产。
+        <SheetDescription className="text-sm font-normal">
+          一个资产关联一个 Zabbix Host；每个巡检项只关联该 Host 下的一个 Item。日志源作为独立数据来源配置。
         </SheetDescription>
       </SheetHeader>
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 min-h-0">
-        {/* ==== 模块 1：关联 Zabbix Host + 推荐巡检项映射 ==== */}
         <section className="rounded-lg border bg-card">
           <header className="flex items-center justify-between px-4 py-3 border-b">
             <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded bg-primary-soft flex items-center justify-center">
-                <Server className="h-3.5 w-3.5 text-primary" />
-              </div>
+              <div className="h-7 w-7 rounded bg-primary-soft flex items-center justify-center"><Server className="h-4 w-4 text-primary" /></div>
               <div>
-                <h4 className="text-sm font-semibold">关联 Zabbix Host</h4>
-                <p className="text-sm text-muted-foreground">选择该资产对应的主 Host，用于采集 Zabbix 指标</p>
+                <h4 className="text-sm font-semibold">Zabbix Host 与巡检项映射</h4>
+                <p className="text-sm text-muted-foreground">先选择 Host，再为巡检项确认对应 Item</p>
               </div>
             </div>
-            {primaryHost && (
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground"
-                onClick={() => { setHostMappings({}); setActiveHost(null); }}>
-                <Trash2 className="h-3 w-3 mr-0.5" />解除关联
+            {hostId && (
+              <Button size="sm" variant="ghost" onClick={() => { setHostId(""); setItemMappings([]); }}>
+                <Trash2 className="h-4 w-4 mr-1" />解除关联
               </Button>
             )}
           </header>
 
           <div className="px-4 py-3 space-y-3">
-            {/* Host 选择器 */}
-            <div className="flex items-end gap-2">
+            <div className="flex items-end gap-3">
               <div className="flex-1">
-                <Label className="text-sm text-muted-foreground">Zabbix Host</Label>
-                <Select value={primaryHost ?? ""} onValueChange={(v) => toggleHost(v)}>
-                  <SelectTrigger className="h-8 mt-1 text-xs">
-                    <SelectValue placeholder="选择 Zabbix Host" />
-                  </SelectTrigger>
+                <Label className="text-sm">Zabbix Host</Label>
+                <Select value={hostId} onValueChange={selectHost}>
+                  <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="选择 Zabbix Host" /></SelectTrigger>
                   <SelectContent>
                     <div className="p-2 border-b">
                       <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-                        <Input value={hostKeyword} onChange={(e) => setHostKeyword(e.target.value)}
-                          placeholder="搜索 Host" className="h-7 pl-6 text-xs"
-                          onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} />
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input value={hostKeyword} onChange={(event) => setHostKeyword(event.target.value)}
+                          placeholder="搜索 Host" className="h-8 pl-8" onClick={(event) => event.stopPropagation()} />
                       </div>
                     </div>
-                    {filteredHosts.length === 0 && (
-                      <div className="p-3 text-center text-xs text-muted-foreground">无匹配 Host</div>
-                    )}
-                    {filteredHosts.map((h) => (
-                      <SelectItem key={h.name} value={h.name} className="text-xs">
-                        <span className="font-mono">{h.name}</span>
-                        <span className="text-sm text-muted-foreground ml-2">{h.itemCount} Items</span>
+                    {filteredHosts.map((host) => (
+                      <SelectItem key={host.id} value={host.id}>
+                        <span className="font-mono">{host.name}</span>
+                        <span className="text-sm text-muted-foreground ml-2">{host.itemCount} Items</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              {primaryHostMeta && (
-                <div className="text-sm text-muted-foreground pb-1.5 flex items-center gap-2">
-                  <span>共 {primaryHostMeta.itemCount} 个 Item</span>
-                  <span className={`flex items-center gap-0.5 ${matchedMetrics === activeMappings.length ? "text-success" : "text-warning"}`}>
-                    {matchedMetrics === activeMappings.length ? <CheckCircle2 className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
-                    {matchedMetrics}/{activeMappings.length} 推荐项已匹配
-                  </span>
+              {selectedHost && (
+                <div className="pb-2 text-sm text-muted-foreground">
+                  共 {selectedHost.itemCount} 个 Item · {matchedCount}/{itemMappings.length} 已匹配
                 </div>
               )}
             </div>
 
-            {/* 推荐巡检项映射表（仅在选中 Host 后展示） */}
-            {primaryHost ? (
+            {hostId ? (
               <div className="rounded-md border overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b">
-                  <div className="text-xs font-medium flex items-center gap-1.5">
-                    <Activity className="h-3.5 w-3.5 text-primary" />
-                    推荐巡检项映射
-                    <span className="text-sm text-muted-foreground font-normal font-mono">· {primaryHost}</span>
-                  </div>
-                  <span className="text-sm text-muted-foreground">系统推荐核心项，用户仅需确认或修正匹配结果</span>
-                </div>
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/10 text-xs">
-                      <TableHead className="h-9 w-[180px]">推荐巡检项</TableHead>
-                      <TableHead className="h-9">匹配的 Zabbix Item</TableHead>
-                      <TableHead className="h-9 w-[80px]">状态</TableHead>
-                      <TableHead className="h-9 w-[100px] text-right">操作</TableHead>
+                    <TableRow>
+                      <TableHead className="w-[220px]">巡检项</TableHead>
+                      <TableHead>关联的 Zabbix Item</TableHead>
+                      <TableHead className="w-[90px]">状态</TableHead>
+                      <TableHead className="w-[90px] text-right">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {activeMappings.map((m) => {
-                      const rec = recommended.find((r) => r.name === m.metric);
-                      const matched = Boolean(m.matchedItem);
-                      const isEditing = editingMetric === m.metric;
-                      const selectableItems = zabbixItemKeys.filter(
-                        (item) => item === m.matchedItem || !activeMappings.some((other) => other.metric !== m.metric && other.matchedItem === item),
-                      );
+                    {itemMappings.map((mapping) => {
+                      const definition = inspectionItems.find((item) => item.id === mapping.inspectionItemId);
+                      const linkedItem = zabbixItems.find((item) => item.id === mapping.zabbixItemId);
+                      const editing = editingItemId === mapping.inspectionItemId;
+                      const selectableItems = hostItems
+                        .filter((item) => item.id === mapping.zabbixItemId || !itemMappings.some((other) => other.zabbixItemId === item.id))
+                        .map((item) => ({ id: item.id, label: item.key }));
                       return (
-                        <TableRow key={m.metric} className="text-xs">
-                          <TableCell className="align-top py-2">
-                            <div className="font-medium">{m.metric}</div>
-                            {rec?.description && (
-                              <div className="text-sm text-muted-foreground mt-0.5">{rec.description}</div>
-                            )}
+                        <TableRow key={mapping.inspectionItemId}>
+                          <TableCell>
+                            <div className="font-medium text-sm">{definition?.name ?? "未知巡检项"}</div>
+                            <div className="text-sm text-muted-foreground">{definition?.description}</div>
                           </TableCell>
-                          <TableCell className="align-top py-2">
-                            {isEditing ? (
-                              <ItemPicker
-                                value={m.matchedItem}
-                                items={selectableItems}
-                                label={`选择 Zabbix Item - ${m.metric}`}
-                                onChange={(item) => {
-                                  updateMapping(primaryHost, m.metric, item);
-                                  setEditingMetric(null);
-                                }}
-                              />
-                            ) : matched ? (
-                              <Badge variant="secondary" className="text-sm font-mono font-normal">
-                                {m.matchedItem}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground italic">未匹配到 Item</span>
-                            )}
+                          <TableCell>
+                            {editing ? (
+                              <ItemPicker value={mapping.zabbixItemId || undefined} items={selectableItems}
+                                label={`选择 Zabbix Item - ${definition?.name ?? "巡检项"}`}
+                                onChange={(itemId) => { updateMapping(mapping.inspectionItemId, itemId); setEditingItemId(null); }} />
+                            ) : linkedItem ? (
+                              <Badge variant="secondary" className="text-sm font-mono font-normal">{linkedItem.key}</Badge>
+                            ) : <span className="text-sm text-muted-foreground">未匹配</span>}
                           </TableCell>
-                          <TableCell className="align-top py-2">
-                            {matched ? (
-                              <span className="inline-flex items-center gap-0.5 text-success text-sm">
-                                <CheckCircle2 className="h-3 w-3" />已匹配
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-0.5 text-warning text-sm">
-                                <AlertCircle className="h-3 w-3" />未匹配
-                              </span>
-                            )}
+                          <TableCell>
+                            <span className={`inline-flex items-center gap-1 text-sm ${linkedItem ? "text-success" : "text-warning"}`}>
+                              {linkedItem ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                              {linkedItem ? "已匹配" : "未匹配"}
+                            </span>
                           </TableCell>
-                          <TableCell className="align-top py-2 text-right">
-                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
-                              onClick={() => setEditingMetric(isEditing ? null : m.metric)}>
-                              <RefreshCw className="h-3 w-3 mr-0.5" />
-                              {matched ? "更换" : "配置"}
-                            </Button>
+                          <TableCell className="text-right">
+                            <TableActions actions={[{
+                              label: linkedItem ? "更换" : "配置",
+                              onClick: () => setEditingItemId(editing ? null : mapping.inspectionItemId),
+                            }]} />
                           </TableCell>
                         </TableRow>
                       );
@@ -897,124 +779,75 @@ function ObservationEditor({
                   </TableBody>
                 </Table>
 
-                <div className="flex items-center border-t px-3 py-2 bg-muted/10 text-sm">
-                  <button type="button" className="text-primary hover:underline flex items-center gap-1"
-                    onClick={() => setCustomOpen((v) => !v)}>
-                    <Plus className="h-3 w-3" />添加自定义巡检项
+                <div className="border-t px-3 py-2 bg-muted/10">
+                  <button type="button" className="text-primary text-sm hover:underline inline-flex items-center gap-1"
+                    onClick={() => setCustomOpen((current) => !current)}>
+                    <Plus className="h-4 w-4" />添加自定义巡检项
                   </button>
                 </div>
-
                 {customOpen && (
-                  <div className="border-t px-3 py-2 bg-background flex gap-2 items-end">
+                  <div className="border-t px-3 py-3 flex gap-2 items-end">
                     <div className="flex-1">
-                      <Label className="text-sm text-muted-foreground">巡检项名称</Label>
-                      <Input value={customMetric.name}
-                        onChange={(e) => setCustomMetric((v) => ({ ...v, name: e.target.value }))}
-                        placeholder="如：GC 停顿时长" className="h-7 text-xs mt-1" />
+                      <Label className="text-sm">巡检项名称</Label>
+                      <Input value={customMetric.name} onChange={(event) => setCustomMetric((current) => ({ ...current, name: event.target.value }))}
+                        placeholder="如：GC 停顿时长" className="h-9 mt-1" />
                     </div>
                     <div className="flex-1">
-                      <Label className="text-sm text-muted-foreground">Zabbix Item</Label>
+                      <Label className="text-sm">Zabbix Item</Label>
                       <div className="mt-1">
-                        <ItemPicker
-                          value={customMetric.item || undefined}
-                          items={customSelectableItems}
+                        <ItemPicker value={customMetric.zabbixItemId || undefined}
+                          items={hostItems.filter((item) => !itemMappings.some((mapping) => mapping.zabbixItemId === item.id)).map((item) => ({ id: item.id, label: item.key }))}
                           label="选择 Zabbix Item - 自定义巡检项"
-                          onChange={(item) => setCustomMetric((v) => ({ ...v, item: item ?? "" }))}
-                        />
+                          onChange={(itemId) => setCustomMetric((current) => ({ ...current, zabbixItemId: itemId ?? "" }))} />
                       </div>
                     </div>
-                    <Button size="sm" className="h-7 text-xs" onClick={addCustomMetric}>添加</Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs"
-                      onClick={() => { setCustomOpen(false); setCustomMetric({ name: "", item: "" }); }}>取消</Button>
+                    <Button size="sm" onClick={addCustomMetric}>添加</Button>
+                    <Button size="sm" variant="outline" onClick={() => setCustomOpen(false)}>取消</Button>
                   </div>
                 )}
-
               </div>
-            ) : (
-              <EmptyHint text="尚未关联 Zabbix Host，请在上方选择" />
-            )}
+            ) : <EmptyHint text="尚未关联 Zabbix Host，请先选择" />}
           </div>
         </section>
 
-        {/* ==== 模块 2：日志源配置（与 Zabbix Host 平级） ==== */}
         <section className="rounded-lg border bg-card">
           <header className="flex items-center justify-between px-4 py-3 border-b">
             <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded bg-info/10 flex items-center justify-center">
-                <FileText className="h-3.5 w-3.5 text-info" />
-              </div>
+              <div className="h-7 w-7 rounded bg-info/10 flex items-center justify-center"><FileText className="h-4 w-4 text-info" /></div>
               <div>
                 <h4 className="text-sm font-semibold">日志源配置</h4>
-                <p className="text-sm text-muted-foreground">
-                  资产级配置，独立于 Zabbix Host；已启用 {logSources.filter((l) => l.enabled).length} / {logSources.length}
-                </p>
+                <p className="text-sm text-muted-foreground">已启用 {logSources.filter((log) => log.enabled).length} / {logSources.length}</p>
               </div>
             </div>
-            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={addLogSource}>
-              <Plus className="h-3 w-3 mr-0.5" />新增日志源
-            </Button>
+            <Button size="sm" variant="ghost" onClick={addLogSource}><Plus className="h-4 w-4 mr-1" />新增日志源</Button>
           </header>
-
-          <div className="px-4 py-3">
-            <div className="rounded-md border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/30 text-xs">
-                    <TableHead className="h-9 w-[180px]">日志名称</TableHead>
-                    <TableHead className="h-9 w-[110px]">日志类型</TableHead>
-                    <TableHead className="h-9">ES 索引 / 过滤条件</TableHead>
-                    <TableHead className="h-9 w-[70px]">启用</TableHead>
-                    <TableHead className="h-9 w-[50px]"></TableHead>
+          <div className="px-4 py-3 rounded-md overflow-hidden">
+            <Table>
+              <TableHeader><TableRow><TableHead>日志名称</TableHead><TableHead>日志类型</TableHead><TableHead>ES 索引 / 过滤条件</TableHead><TableHead className="w-[70px]">启用</TableHead><TableHead className="w-[50px]" /></TableRow></TableHeader>
+              <TableBody>
+                {logSources.map((log, index) => (
+                  <TableRow key={log.id}>
+                    <TableCell><Input value={log.name} onChange={(event) => updateLog(index, { name: event.target.value })} /></TableCell>
+                    <TableCell>
+                      <Select value={log.logType} onValueChange={(logType) => updateLog(index, { logType })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{logTypePresets.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell><Input value={log.filter} onChange={(event) => updateLog(index, { filter: event.target.value })} /></TableCell>
+                    <TableCell><Switch checked={log.enabled} onCheckedChange={(enabled) => updateLog(index, { enabled })} /></TableCell>
+                    <TableCell><TableActions actions={[{ label: "移除", onClick: () => removeLog(index) }]} /></TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {logSources.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-4">
-                        暂无日志源，点击右上角新增
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {logSources.map((l, idx) => (
-                    <TableRow key={idx} className="text-xs">
-                      <TableCell className="py-1.5">
-                        <Input value={l.name} onChange={(e) => updateLog(idx, { name: e.target.value })}
-                          className="h-7 text-xs" />
-                      </TableCell>
-                      <TableCell className="py-1.5">
-                        <Select value={l.logType} onValueChange={(v) => updateLog(idx, { logType: v })}>
-                          <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {logTypePresets.map((t) => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell className="py-1.5">
-                        <Input value={l.filter} onChange={(e) => updateLog(idx, { filter: e.target.value })}
-                          placeholder="如 es-app-log / level=ERROR"
-                          className="h-7 text-xs font-mono" />
-                      </TableCell>
-                      <TableCell className="py-1.5">
-                        <Switch checked={l.enabled} onCheckedChange={(v) => updateLog(idx, { enabled: v })} />
-                      </TableCell>
-                      <TableCell className="py-1.5">
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeLog(idx)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </section>
       </div>
 
       <div className="border-t px-6 py-3 flex justify-end gap-2 bg-background">
         <Button variant="outline" size="sm" onClick={onCancel}>取消</Button>
-        <Button size="sm" onClick={() => onSave({ hostMappings, logSources })}>保存配置</Button>
+        <Button size="sm" onClick={() => onSave({ assetId: asset.id, zabbixHostId: hostId, itemMappings, logSources })}>保存配置</Button>
       </div>
     </div>
   );
@@ -1025,7 +858,7 @@ function ObservationEditor({
 function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: EditableConfig; onEdit: () => void; onEditObs: () => void }) {
   const meta = typeMeta[asset.type];
   const Icon = meta.icon;
-  const hosts = cfg ? Object.keys(cfg.hostMappings) : [];
+  const host = cfg ? zabbixHosts.find((candidate) => candidate.id === cfg.zabbixHostId) : undefined;
   const logSources = cfg?.logSources ?? [];
 
   return (
@@ -1072,32 +905,24 @@ function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: Ed
         </Section>
 
         <Section title={<span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-primary" />Zabbix Host / Item 映射</span>}>
-          {hosts.length ? (
-            <div className="space-y-2">
-              {hosts.map((h) => {
-                const mappings = cfg?.hostMappings[h] ?? [];
-                const matched = mappings.filter((m) => m.matchedItem).length;
-                return (
-                  <div key={h} className="rounded-lg border bg-card p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-mono text-xs text-primary">{h}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {matched}/{mappings.length} 已匹配
-                      </span>
+          {host && cfg ? (
+            <div className="rounded-lg border bg-card p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-mono text-sm text-primary">{host.name}</span>
+                <span className="text-sm text-muted-foreground">{cfg.itemMappings.filter((mapping) => mapping.zabbixItemId).length}/{cfg.itemMappings.length} 已匹配</span>
+              </div>
+              <div className="space-y-1.5">
+                {cfg.itemMappings.map((mapping) => {
+                  const definition = inspectionItems.find((item) => item.id === mapping.inspectionItemId);
+                  const item = zabbixItems.find((candidate) => candidate.id === mapping.zabbixItemId);
+                  return (
+                    <div key={mapping.inspectionItemId} className="flex items-start justify-between gap-2 text-sm">
+                      <span className="text-foreground/90 flex-shrink-0">{definition?.name ?? "未知巡检项"}</span>
+                      <span className="text-muted-foreground font-mono text-right truncate">{item?.key ?? "未匹配"}</span>
                     </div>
-                    <div className="space-y-1">
-                      {mappings.map((m) => (
-                        <div key={m.metric} className="flex items-start justify-between gap-2 text-xs">
-                          <span className="text-foreground/90 flex-shrink-0">{m.metric}</span>
-                          <span className="text-muted-foreground font-mono text-sm text-right truncate">
-                            {m.matchedItem ?? "未匹配"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <EmptyHint text="尚未关联 Zabbix Host" />
@@ -1130,7 +955,7 @@ function AssetDetail({ asset, cfg, onEdit, onEditObs }: { asset: Asset; cfg?: Ed
             <Pencil className="h-4 w-4 mr-1" />编辑资产
           </Button>
           <Button variant="outline" size="sm" onClick={onEditObs}>
-            <Settings2 className="h-4 w-4 mr-1" />编辑观测配置
+            <Settings2 className="h-4 w-4 mr-1" />观测配置
           </Button>
         </div>
       </div>
